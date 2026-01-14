@@ -559,11 +559,12 @@ Caso especial: cuando se factoriza una factura de venta.
 |----|-------|------------|
 | RN-01 | Toda operación debe tener al menos una línea de producto | Validar antes de guardar |
 | RN-02 | La cantidad debe ser mayor a cero | Validar en cada línea |
-| RN-03 | Número de operación es secuencial: OP-AAAA-NNNNN | Sistema genera automático |
+| RN-03 | Número de operación es secuencial: OP-2026-00001 en adelante | Sistema genera automático |
 | RN-04 | No se puede eliminar operación con documentos o pagos asociados | Validar referencias |
 | RN-05 | Operación COMPRA requiere proveedor obligatorio | Validar al crear |
 | RN-06 | Operación VENTA_* requiere cliente obligatorio | Validar al crear |
 | RN-07 | Operación VENTA_COMISION requiere proveedor Y cliente | Validar al crear |
+| RN-08 | El cierre de operación requiere una Observación de Cierre | Campo obligatorio al cambiar a CERRADA |
 
 ### 6.2 Reglas de Documentos
 
@@ -774,7 +775,16 @@ def calcular_estado_documental(operacion):
 | RF-DASH-04 | Alertas visuales por prioridad | 🔴 Crítica | 🔴 Urgente, 🟡 Atención, 🟢 OK |
 | RF-DASH-05 | Accesos rápidos | 🟡 Alta | Botones para crear nueva operación |
 
-### 8.6 Módulo de Contactos (RF-CONT)
+### 8.6 Módulo de Guías (Registro)
+
+| ID | Requerimiento | Prioridad | Descripción |
+|----|---------------|-----------|-------------|
+| RF-GUIA-01 | Registrar guía de tercero/proveedor | 🔴 Crítica | Ingresar número, fecha, transporte |
+| RF-GUIA-02 | Capturar datos de transporte | 🟡 Alta | Nombre chofer, RUT y patente (según muestra) |
+| RF-GUIA-03 | Asociar guía a operación existente | 🔴 Crítica | Vínculo N:1 entre guías y operación |
+| RF-GUIA-04 | Adjuntar imagen/PDF de la guía | 🔴 Crítica | Registro visual del documento físico |
+
+### 8.7 Módulo de Contactos (RF-CONT)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -785,7 +795,7 @@ def calcular_estado_documental(operacion):
 | RF-CONT-05 | Ver operaciones de contacto | 🟡 Alta | Historial de operaciones |
 | RF-CONT-06 | Validación de RUT | 🟡 Alta | Dígito verificador, unicidad |
 
-### 8.7 Módulo de Productos (RF-PROD)
+### 8.8 Módulo de Productos (RF-PROD)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -793,7 +803,7 @@ def calcular_estado_documental(operacion):
 | RF-PROD-02 | Crear tipo de pallet | 🟢 Baja | Para futuros productos |
 | RF-PROD-03 | Configurar si requiere certificación | 🟡 Alta | NIMF-15 obligatorio |
 
-### 8.8 Módulo de Reportes (RF-REP)
+### 8.9 Módulo de Reportes (RF-REP)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -803,7 +813,7 @@ def calcular_estado_documental(operacion):
 | RF-REP-04 | Trazabilidad por número de operación | 🟡 Alta | Documentos, pagos, historial |
 | RF-REP-05 | Exportar a Excel/CSV | 🟢 Media | Descargar reportes |
 
-### 8.9 Módulo de Autenticación (RF-AUTH)
+### 8.10 Módulo de Autenticación (RF-AUTH)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -870,7 +880,7 @@ def calcular_estado_documental(operacion):
 
 ---
 
-## 10. Supuestos y Decisiones de Diseño v2.0
+## 10. Supuestos y Decisiones de Diseño v2.1
 
 ### 10.1 Hechos Confirmados con el Cliente
 
@@ -886,8 +896,9 @@ def calcular_estado_documental(operacion):
 | ✅ HC-08 | **Pagos y factoring son importantes** | Módulo financiero básico incluido |
 | ✅ HC-09 | **Acepta informalidad actual** | Sistema debe poner estructura gradualmente |
 | ✅ HC-10 | **No es un sistema de contabilidad** | Control operativo, no contable |
+| ✅ HC-11 | **No se emitirán guías desde el sistema** | Solo registro de guías externas |
 
-### 10.2 Decisiones de Diseño Tomadas v2.0
+### 10.2 Decisiones de Diseño Tomadas v2.1
 
 | ID | Decisión | Alternativa descartada | Justificación |
 |----|----------|----------------------|---------------|
@@ -901,6 +912,8 @@ def calcular_estado_documental(operacion):
 | 🔵 DEC-08 | **No hay validaciones estrictas** | Bloqueos por reglas de negocio | Cliente acepta flexibilidad |
 | 🔵 DEC-09 | **Reportes simples, no BI** | Reportes avanzados con gráficos | Cliente no los necesita |
 | 🔵 DEC-10 | **Móvil no es prioridad** | Mobile-first | Uso principal desde computador |
+| 🔵 DEC-11 | **Cierre con observación obligatoria** | Cierre con un solo click | Trazabilidad de por qué se cerró |
+| 🔵 DEC-12 | **Captura de datos de transporte** | Solo subir foto de guía | Necesario para trazabilidad de quién movió qué |
 
 ### 10.3 Simplificaciones Importantes vs v1.0
 
@@ -1247,7 +1260,8 @@ Pero si el equipo prefiere **Python**, la opción HTMX es excelente y cumple per
 |---------|-------|-------|---------|
 | 1.0 | 2026-01-09 | Arquitectura | Documento inicial con modelo de intermediación |
 | 1.1 | 2026-01-09 | Arquitectura | Confirmación modelo sin bodega física |
-| **2.0** | **2026-01-12** | **Arquitectura** | **Rediseño completo basado en feedback del cliente:** <br>• Modelo unificado de "Operaciones" <br>• Enfoque en control documental y alertas <br>• Eliminación de complejidad innecesaria <br>• Usuario único (sin roles) <br>• Estados simples (Documental + Financiero) <br>• Módulos de Pagos y Factoring <br>• Dashboard centrado en pendientes <br>• Wireframes rediseñados <br>• Reducción 60% complejidad vs v1.0 |
+| 2.0 | 2026-01-12 | Arquitectura | Rediseño completo: Operaciones unificadas |
+| **2.1** | **2026-01-12** | **Arquitectura** | **Alcance 100% Cerrado:** <br>• Correlativo inicia en OP-2026-00001 <br>• Cierre requiere observación obligatoria <br>• Se elimina impresión de guías (solo registro) <br>• Captura de datos de transporte (Chofer/Patente) <br>• Validación de supuestos operativos |
 
 ---
 

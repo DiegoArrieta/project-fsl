@@ -9,11 +9,11 @@
 ## 1. Confirmación de Supuestos Críticos
 *Por favor, marque con una [X] si el supuesto es correcto. Si no lo es, favor comentar.*
 
-- [ ] **S1. Volumen de Operaciones:** Se asume que el volumen es manejable (< 50 operaciones al mes) y que un usuario único puede gestionarlo sin problemas.
-- [ ] **S2. Flujos de Trabajo:** Se asume que NO existen flujos de aprobación (ej: que un supervisor deba aprobar una venta). Todo lo que registre el usuario es válido.
-- [ ] **S3. Digitalización:** Se asume que el cliente tiene la capacidad de escanear o fotografiar todos los documentos (OC, Guías, Facturas) para subirlos al sistema.
-- [ ] **S4. Firma Digital:** El sistema NO gestionará firmas digitales. Las guías se firman físicamente y luego se sube la foto de la guía firmada.
-- [ ] **S5. Precios:** Los precios son informativos. El sistema no bloqueará operaciones si el margen es bajo o negativo.
+- [X] **S1. Volumen de Operaciones:** Se asume que el volumen es manejable (< 50 operaciones al mes) y que un usuario único puede gestionarlo sin problemas.
+- [X] **S2. Flujos de Trabajo:** Se asume que NO existen flujos de aprobación (ej: que un supervisor deba aprobar una venta). Todo lo que registre el usuario es válido.
+- [X] **S3. Digitalización:** Se asume que el cliente tiene la capacidad de escanear o fotografiar todos los documentos (OC, Guías, Facturas) para subirlos al sistema.
+- [X] **S4. Firma Digital:** El sistema NO gestionará firmas digitales. Las guías se firman físicamente y luego se sube la foto de la guía firmada.
+- [X] **S5. Precios:** Los precios son informativos. El sistema no bloqueará operaciones si el margen es bajo o negativo.
 
 ---
 
@@ -21,18 +21,18 @@
 
 **P1. Correlativo de Operaciones:**
 ¿Con qué número desea que comience el sistema?
-- [ ] OP-2026-00001 (Recomendado)
+- [X] OP-2026-00001 (Recomendado)
 - [ ] Otro: ____________________
 
 **P2. Definición del Botón "Cerrar Operación":**
 ¿Qué debe pasar exactamente cuando una operación se marca como "CERRADA"?
 - [ ] a) Solo cambia el color a verde/check (visual).
 - [ ] b) Se bloquea la edición de todo (documentos y pagos) para evitar cambios accidentales.
-- [ ] c) Se requiere que el sistema pida una "Observación de Cierre" obligatoria.
+- [X] c) Se requiere que el sistema pida una "Observación de Cierre" obligatoria.
 
 **P3. Emisión de Guías Propias:**
 ¿El sistema debe permitir GENERAR e IMPRIMIR una guía de despacho propia de FSL?
-- [ ] No, solo registramos las guías que ya vienen en papel.
+- [X] No, solo registramos las guías que ya vienen en papel.
 - [ ] Sí, el sistema debe generar el documento para imprimir (requiere definir formato legal).
 
 ---
