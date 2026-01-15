@@ -31,6 +31,7 @@ Toda la especificación técnica está disponible en la carpeta `/docs`:
 | [🔌 API Specification](docs/API-SPEC.md) | Endpoints REST, request/response, validaciones | ✅ v1.0 |
 | [✅ Ficha de Validación](docs/FICHA-VALIDACION-FINAL.md) | Supuestos validados y decisiones tácticas | ✅ Firmado |
 | [❓ Preguntas Abiertas](docs/PREGUNTAS-ABIERTAS.md) | Preguntas resueltas y pendientes | ✅ 100% |
+| [💰 Propuesta Comercial](docs/PROPUESTA-COMERCIAL.md) | Cotización, desglose de horas, opciones de pago | ✅ v1.0 |
 
 ### Estructura de Documentación
 
@@ -41,7 +42,8 @@ docs/
 ├── UI-SPEC.md                     # Especificación de interfaz de usuario
 ├── API-SPEC.md                    # Especificación de endpoints REST
 ├── FICHA-VALIDACION-FINAL.md      # Validación de alcance con cliente
-└── PREGUNTAS-ABIERTAS.md          # Registro de preguntas y respuestas
+├── PREGUNTAS-ABIERTAS.md          # Registro de preguntas y respuestas
+└── PROPUESTA-COMERCIAL.md         # Cotización y propuesta económica
 ```
 
 ---
