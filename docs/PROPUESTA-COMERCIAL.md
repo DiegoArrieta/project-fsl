@@ -12,11 +12,10 @@
 
 | Campo | Detalle |
 |-------|---------|
-| **Profesional** | [Tu Nombre / Razón Social] |
-| **RUT** | [XX.XXX.XXX-X] |
-| **Especialidad** | Ingeniero de Software Senior |
-| **Contacto** | [email@ejemplo.com] |
-| **Teléfono** | [+56 9 XXXX XXXX] |
+| **Profesional** | [Diego Arrieta M.] |
+| **Especialidad** | Lead Software Engineer |
+| **Contacto** | [diego@355labs.cl] |
+| **Teléfono** | [+56 9 5011 8000] |
 
 ---
 
