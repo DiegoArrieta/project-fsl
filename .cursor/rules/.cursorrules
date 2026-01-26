@@ -1,0 +1,311 @@
+---
+alwaysApply: true
+---
+# Cursor Rules - Forestal Santa Lucía SpA
+## Sistema de Gestión Operativa
+
+## 📋 Contexto del Proyecto
+
+Este es un sistema web para **Forestal Santa Lucía SpA**, una empresa que opera como intermediario comercial en el negocio de compra y venta de pallets de madera.
+
+### Modelo de Negocio
+- **Cliente emite OC a FSL** → Cliente solicita pallets mediante orden de compra
+- **FSL genera OC a proveedores** → FSL solicita pallets a proveedores mediante sus propias OC
+- **Operación Unificada** → Una operación de venta incluye automáticamente la compra asociada al proveedor
+- **Sin bodega física** → Los pallets viajan directamente del proveedor al cliente final
+- **Cálculo automático de márgenes** → Sistema calcula rentabilidad por operación
+
+### Objetivo del Sistema
+Sistema de **control operativo** (no contabilidad) que:
+- Centraliza todas las operaciones comerciales
+- Detecta automáticamente documentos faltantes
+- Genera órdenes de compra profesionales en PDF
+- Calcula márgenes automáticamente
+- Muestra pendientes de forma clara y accionable
+
+---
+
+## 🛠 Stack Tecnológico
+
+### Recomendado (Next.js Full-Stack)
+- **Frontend**: Next.js 14 (App Router) + TypeScript
+- **UI Components**: shadcn/ui + Tailwind CSS
+- **Estado**: React Query (TanStack Query)
+- **Backend**: Next.js API Routes
+- **ORM**: Prisma
+- **Base de Datos**: PostgreSQL
+- **Autenticación**: Auth.js (NextAuth.js v5) con Credentials Provider
+- **Hash de Contraseñas**: Node.js `crypto` con `bcrypt` (salt rounds: 10)
+- **Storage**: Supabase Storage o S3
+- **Hosting**: Vercel
+
+### Alternativa (Python)
+- **Backend**: FastAPI
+- **Frontend**: HTMX + Jinja2
+- **ORM**: SQLAlchemy + Alembic
+- **UI**: Tailwind CSS + DaisyUI
+
+---
+
+## 📊 Modelo de Datos Clave
+
+### Entidades Principales
+
+#### Operacion (Operación Unificada)
+- **Tipo**: COMPRA, VENTA_DIRECTA, VENTA_COMISION
+- **Campos clave**:
+  - `numero`: Secuencial (OP-2026-00001)
+  - `cliente_id`: Obligatorio si VENTA_*
+  - `proveedor_id`: Obligatorio si COMPRA o VENTA_* (operación unificada)
+  - `orden_compra_cliente`: Número de OC que el cliente emitió a FSL
+  - `orden_compra_generada_id`: FK a OrdenCompra (OC generada por FSL)
+  - `estado_documental`: INCOMPLETA, COMPLETA
+  - `estado_financiero`: PENDIENTE, FACTURADA, PAGADA, CERRADA
+
+#### OperacionLinea
+- **Para VENTA_***:
+  - `precio_venta_unitario`: Precio al cliente
+  - `precio_compra_unitario`: Costo al proveedor
+  - `margen_unitario`: Calculado (venta - compra)
+- **Para COMPRA**:
+  - `precio_unitario`: Precio de compra
+- **Campos comunes**:
+  - `cantidad`: Solicitada original
+  - `cantidad_entregada`: Recibida conforme
+  - `cantidad_danada`: Pallets dañados/rechazados
+
+#### OrdenCompra
+- **Número**: Secuencial (OC-2026-00001)
+- **Estado**: BORRADOR, ENVIADA, RECIBIDA, CANCELADA
+- **PDF**: Generado automáticamente, guardado en `/uploads/ocs/`
+- **Asociación**: Puede asociarse a operación mediante `operacion_id`
+
+#### Documento
+- **Tipos**: ORDEN_COMPRA, GUIA_DESPACHO, GUIA_RECEPCION, FACTURA, CERTIFICADO_NIMF15
+- **Archivo**: PDF o imagen (JPG, PNG), máximo 10 MB
+- **Obligatoriedad**: Depende del tipo de operación y productos
+
+#### Pago
+- **Tipos**: COBRO_CLIENTE, PAGO_PROVEEDOR, PAGO_FLETE
+- **Asociado a**: Operacion
+- **Actualiza**: Estado financiero automáticamente
+
+---
+
+## 🔑 Reglas de Negocio Críticas
+
+### Operaciones
+1. **Operación VENTA_* requiere cliente Y proveedor** (operación unificada)
+2. **Operación VENTA_* debe tener precios de venta Y compra** en las líneas
+3. **Margen no puede ser negativo**: `precio_venta_unitario >= precio_compra_unitario`
+4. **Número secuencial**: OP-YYYY-NNNNN (generado automáticamente)
+5. **Cierre requiere observación obligatoria**
+
+### Órdenes de Compra
+1. **Número secuencial**: OC-YYYY-NNNNN (generado al crear PDF)
+2. **OC debe tener al menos una línea** antes de generar PDF
+3. **Solo OC en BORRADOR puede editarse**
+4. **PDF solo se genera una vez** por OC
+
+### Documentos
+1. **Documentos obligatorios dependen del tipo de operación**:
+   - COMPRA: OC de FSL, Guía de Recepción
+   - VENTA_*: OC del Cliente, OC de FSL, Guía de Despacho, Factura
+   - Si hay pallet certificado: Certificado NIMF-15 obligatorio
+2. **Solo PDF, JPG, PNG** (máximo 10 MB)
+3. **Sistema detecta automáticamente documentos faltantes**
+
+### Pagos
+1. **Para operaciones de venta**: Registrar tanto cobro a cliente como pago a proveedor
+2. **Estado financiero se actualiza automáticamente** según pagos
+3. **Múltiples pagos permitidos** (pagos parciales)
+
+### Cálculos Automáticos
+- **Total Venta**: Σ(cantidad × precio_venta_unitario)
+- **Total Compra**: Σ(cantidad × precio_compra_unitario)
+- **Margen Bruto**: Total Venta - Total Compra
+- **Margen Porcentual**: (Margen Bruto / Total Venta) × 100
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+forestal-santa-lucia/
+├── docs/                    # Documentación completa
+│   ├── PRD.md              # Product Requirements Document
+│   ├── SDD-forestal-santa-lucia.md  # Spec Driven Development
+│   ├── UI-SPEC.md          # UI Specification
+│   ├── API-SPEC.md         # API Specification
+│   ├── DATABASE-SCHEMA.md  # Database Schema
+│   └── PROPUESTA-COMERCIAL.md
+├── .cursorrules            # Este archivo
+└── README.md
+```
+
+---
+
+## 💻 Convenciones de Código
+
+### TypeScript/Next.js
+- **TypeScript estricto**: Habilitar todas las verificaciones
+- **Naming**:
+  - Componentes: PascalCase (`OperacionCard.tsx`)
+  - Funciones: camelCase (`crearOperacion`)
+  - Constantes: UPPER_SNAKE_CASE (`ESTADO_DOCUMENTAL`)
+  - Tipos/Interfaces: PascalCase (`Operacion`, `OperacionLinea`)
+- **Archivos**:
+  - Componentes: `components/operaciones/OperacionCard.tsx`
+  - API Routes: `app/api/operaciones/route.ts`
+  - Tipos: `types/operacion.ts`
+  - Utils: `lib/utils.ts`
+
+### Base de Datos (Prisma)
+- **Modelos**: PascalCase singular (`Operacion`, `OperacionLinea`)
+- **Campos**: snake_case (`proveedor_id`, `estado_documental`)
+- **Relaciones**: Nombres descriptivos (`operacion`, `lineas`, `documentos`)
+
+### API
+- **REST JSON**: Usar estándares REST
+- **Respuestas**: Siempre incluir `{ success: boolean, data: T }`
+- **Errores**: Códigos HTTP apropiados, mensajes claros
+- **Validación**: Validar en backend, nunca confiar en frontend
+
+### UI
+- **Componentes**: Usar shadcn/ui como base
+- **Estilos**: Tailwind CSS (utility-first)
+- **Estado**: React Query para datos del servidor
+- **Formularios**: React Hook Form + Zod para validación
+
+---
+
+## 🎯 Principios de Diseño
+
+### Simplicidad
+- **Un solo usuario** en MVP (sin roles complejos)
+- **Interfaz simple**: No sobrecargar con opciones
+- **Flujos claros**: Cada acción debe tener un propósito claro
+
+### Control Operativo
+- **No es contabilidad**: Enfoque en control práctico del día a día
+- **Alertas proactivas**: Sistema avisa, usuario no busca
+- **Trazabilidad completa**: Todo documentado y rastreable
+
+### Operación Unificada
+- **Venta y compra juntas**: Una operación contiene ambos lados
+- **Márgenes automáticos**: Sistema calcula rentabilidad
+- **OC asociada**: OC generada vinculada a la operación
+
+---
+
+## 📚 Documentación de Referencia
+
+### Documentos Principales
+1. **PRD.md**: Visión del producto, objetivos, casos de uso
+2. **SDD-forestal-santa-lucia.md**: Especificación funcional completa
+3. **UI-SPEC.md**: Especificación de interfaz de usuario
+4. **API-SPEC.md**: Especificación de endpoints REST
+5. **DATABASE-SCHEMA.md**: Esquema completo de base de datos
+
+### Versiones Actuales
+- SDD: v2.5 (Operación Unificada)
+- DATABASE-SCHEMA: v1.3
+- UI-SPEC: v1.4
+- API-SPEC: v1.4
+
+---
+
+## ⚠️ Consideraciones Importantes
+
+### Validaciones Críticas
+- **Siempre validar en backend** (nunca confiar solo en frontend)
+- **Validar márgenes no negativos** antes de guardar
+- **Validar documentos obligatorios** antes de cerrar operación
+- **Validar estado de OC** antes de editar/generar PDF
+
+### Seguridad
+- **Autenticación requerida** para todas las rutas
+- **Auth.js (NextAuth.js v5)**: Usar Credentials Provider para autenticación
+- **Hash de contraseñas**: Usar `bcrypt` con `crypto` de Node.js, salt rounds: 10
+- **Validar permisos** (aunque sea un solo usuario en MVP)
+- **Sanitizar inputs** antes de guardar
+- **Validar tipos de archivo** en uploads
+- **Nunca almacenar contraseñas en texto plano**: Siempre usar hash con bcrypt
+
+### Performance
+- **Paginación** en listados grandes
+- **Índices** en campos de búsqueda frecuente
+- **Lazy loading** de imágenes/documentos
+- **Caché** con React Query
+
+### UX
+- **Feedback inmediato**: Loading states, mensajes claros
+- **Confirmaciones**: Para acciones destructivas
+- **Navegación clara**: Breadcrumbs, links obvios
+- **Responsive**: Funcional en desktop (mobile no prioritario)
+
+---
+
+## 🚀 Roadmap
+
+### MVP (Semanas 1-4)
+- Operaciones unificadas
+- Generación de OC en PDF
+- Gestión de documentos
+- Dashboard de pendientes
+- Módulo de pagos básico
+
+### V1.1 (Semanas 5-6)
+- Factoring
+- Reportes simples
+- Mejoras de pagos
+
+### V1.2 (Semanas 7-8)
+- Mejoras de UX
+- Búsquedas avanzadas
+- Exportación de datos
+
+---
+
+## 🔍 Cuando Implementar
+
+### Al crear una Operación
+1. Validar que VENTA_* tenga cliente Y proveedor
+2. Validar que líneas tengan ambos precios (venta y compra)
+3. Calcular márgenes automáticamente
+4. Generar número secuencial
+
+### Al generar OC
+1. Validar que tenga al menos una línea
+2. Generar número secuencial (OC-YYYY-NNNNN)
+3. Crear PDF profesional
+4. Cambiar estado a ENVIADA
+5. Asociar a operación si aplica
+
+### Al subir documento
+1. Validar tipo de archivo (PDF, JPG, PNG)
+2. Validar tamaño (máx 10 MB)
+3. Actualizar estado documental automáticamente
+4. Mostrar alerta si completa documentos faltantes
+
+### Al registrar pago
+1. Validar monto > 0
+2. Validar fecha no futura
+3. Actualizar estado financiero automáticamente
+4. Mostrar alerta si completa pagos pendientes
+
+---
+
+## 📝 Notas Adicionales
+
+- **Sistema personal**: Un solo usuario en MVP, sin roles
+- **No es contabilidad**: Solo control operativo
+- **Sin bodega**: FSL no tiene stock físico
+- **Modelo intermediación**: Proveedor → Cliente directo
+- **Enfoque en orden**: Sistema debe ayudar a mantener todo organizado
+
+---
+
+**Última actualización**: 2026-01-15  
+**Versión del proyecto**: MVP (Fase 1)
+

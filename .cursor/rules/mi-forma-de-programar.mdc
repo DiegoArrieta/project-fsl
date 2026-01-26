@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+Generar componentes para reliazar las vistas, si el componente se usa en mas de 1 lugar entonces es un componente shared, y lo reutilizaras teniendo en cuenta las props recibidas.
+
+Procuraras optimizar el codigo con clean code.
+
+Los formularios los validaras con formik, usando el useFormik, dejando <FormikProvider form>
+
+- no uses redux, si hay que menejar gestion de estados usa zustand
+ 
+- despues de cada interaccion verifica lint, importaciones no usadas.

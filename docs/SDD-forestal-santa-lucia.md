@@ -1,8 +1,8 @@
 # SDD - Spec Driven Development Document
 ## Sistema de Gestión Operativa - Forestal Santa Lucía SpA
 
-**Versión:** 2.0  
-**Fecha:** 2026-01-12  
+**Versión:** 2.5  
+**Fecha:** 2026-01-15  
 **Estado:** Especificación validada con cliente  
 **Autor:** Arquitectura de Software  
 
@@ -35,10 +35,20 @@
 Forestal Santa Lucía SpA opera como **intermediario comercial** en el negocio de compra y venta de pallets de madera. 
 
 **Modelo de negocio:**
-- FSL compra pallets a proveedores
-- FSL vende pallets a clientes (venta directa o por comisión)
+- **Cliente realiza orden de compra a FSL** - El cliente solicita pallets mediante una orden de compra dirigida a FSL
+- **FSL genera órdenes de compra a proveedores** - Una vez recibida la OC del cliente, FSL solicita los pallets a sus proveedores mediante sus propias órdenes de compra
+- **FSL opera como intermediario** - Registra en una **operación unificada** tanto la venta al cliente como la compra al proveedor
 - **Los pallets viajan directamente del proveedor al cliente final** (sin bodega FSL)
 - FSL no mantiene stock físico propio
+
+**Flujo operativo típico:**
+1. Cliente emite orden de compra a FSL
+2. FSL crea **una operación unificada** que contiene:
+   - **Venta al cliente**: OC del cliente, precios de venta, cobro al cliente
+   - **Compra al proveedor**: OC generada por FSL, costos de compra, pago al proveedor
+3. FSL genera órdenes de compra (PDF) a los proveedores necesarios
+4. Proveedores despachan directamente al cliente final
+5. FSL gestiona documentos, pagos (cobros y pagos) y trazabilidad en la misma operación
 
 Actualmente, la operación se gestiona con Excel, WhatsApp y documentos físicos. No hay un sistema que centralice operaciones, documentos y pagos.
 
@@ -62,10 +72,11 @@ Excel funciona para registrar, pero:
 Sistema web **personal y simple** que:
 
 1. **Registra todas las operaciones** (compras, ventas, comisiones) de forma unificada
-2. **Asocia documentos** a cada operación (OC, guías, facturas, certificados)
-3. **Detecta y alerta** documentos faltantes automáticamente
-4. **Controla pagos** (clientes, proveedores, fletes, factoring)
-5. **Muestra pendientes** de forma clara y accionable
+2. **Genera órdenes de compra** a proveedores con número secuencial y PDF profesional
+3. **Asocia documentos** a cada operación (OC, guías, facturas, certificados)
+4. **Detecta y alerta** documentos faltantes automáticamente
+5. **Controla pagos** (clientes, proveedores, fletes, factoring)
+6. **Muestra pendientes** de forma clara y accionable
 
 **No es un sistema de contabilidad**, es un sistema de **control operativo**.
 
@@ -88,6 +99,7 @@ Desarrollo incremental enfocado en valor inmediato:
 | Módulo | Funcionalidades |
 |--------|-----------------|
 | **Operaciones** | Registro unificado de compras, ventas y ventas con comisión |
+| **Órdenes de Compra** | Generación de OC a proveedores con número secuencial y PDF |
 | **Documentos** | Subida, asociación y control de documentos (OC, guías, facturas, certificados NIMF-15) |
 | **Alertas** | Detección automática de documentos faltantes y pendientes |
 | **Pagos** | Registro de pagos a proveedores, cobros a clientes, pagos de fletes |
@@ -111,6 +123,7 @@ Desarrollo incremental enfocado en valor inmediato:
 | Integraciones externas | No necesarias en MVP |
 | Gestión de bodega/almacén | FSL no tiene stock físico (modelo intermediación) |
 | Dashboard sofisticado | Dashboard simple enfocado en pendientes |
+| Envío automático de OC por email | PDF se descarga manualmente para envío |
 
 ---
 
@@ -144,22 +157,30 @@ En fases posteriores se podría considerar:
 
 ## 4. Modelo de Dominio
 
-### 4.1 Filosofía del Modelo v2.0
+### 4.1 Filosofía del Modelo v2.5 (Operación Unificada)
 
-**Cambio fundamental:** El sistema ya no distingue visualmente entre "compras", "ventas" y "comisiones". Ahora todo es una **Operación comercial** con:
+**Cambio fundamental:** El sistema maneja **operaciones unificadas** que integran tanto la venta al cliente como la compra al proveedor en una sola entidad. Una operación comercial contiene:
 
 - Tipo interno (compra/venta/comisión)
+- **Cliente** (destinatario de la venta)
+- **Proveedor** (origen de la compra) - presente en operaciones de venta
+- **OC del Cliente** (orden de compra que el cliente emitió a FSL)
+- **OC Generada** (orden de compra que FSL emite al proveedor)
+- **Precios de venta** (al cliente)
+- **Costos de compra** (al proveedor)
+- **Márgenes calculados** automáticamente
 - Documentos asociados
 - Estado documental
 - Estado financiero
-- Participantes (proveedor/cliente)
 
-El usuario ve **operaciones**, no "módulos separados". La complejidad se reduce dramáticamente.
+**Principio clave:** Una operación de venta incluye automáticamente la compra asociada. No hay operaciones de compra separadas para ventas; todo está unificado.
+
+El usuario ve **operaciones completas** con toda la información de venta y compra en un solo lugar.
 
 ### 4.2 Entidades Principales
 
 #### **Operacion**
-Entidad central unificada que representa cualquier transacción comercial.
+Entidad central unificada que representa una transacción comercial completa, incluyendo tanto la venta al cliente como la compra al proveedor.
 
 | Atributo | Tipo | Requerido | Descripción |
 |----------|------|-----------|-------------|
@@ -167,26 +188,31 @@ Entidad central unificada que representa cualquier transacción comercial.
 | numero | String | Sí | Número correlativo (OP-AAAA-NNNNN) |
 | tipo | Enum | Sí | COMPRA, VENTA_DIRECTA, VENTA_COMISION |
 | fecha | Date | Sí | Fecha de la operación |
-| proveedor_id | UUID | Condicional | Requerido si tipo=COMPRA o VENTA_COMISION |
+| proveedor_id | UUID | Condicional | Requerido si tipo=COMPRA o VENTA_COMISION. También requerido en VENTA_DIRECTA si hay compra asociada |
 | cliente_id | UUID | Condicional | Requerido si tipo=VENTA_* |
 | estado_documental | Enum | Sí | INCOMPLETA, COMPLETA |
 | estado_financiero | Enum | Sí | PENDIENTE, FACTURADA, PAGADA, CERRADA |
 | direccion_entrega | String | No | Dirección de entrega |
+| orden_compra_cliente | String | No | Número de orden de compra del cliente (para operaciones de venta) |
+| orden_compra_fsl_id | UUID | No | Referencia a la OC generada por FSL al proveedor (si aplica) |
 | observaciones | Text | No | Notas generales |
 | created_at | Timestamp | Sí | Fecha de creación |
 | updated_at | Timestamp | Sí | Última modificación |
 
 #### **OperacionLinea**
-Detalle de productos en una operación (múltiples tipos de pallet).
+Detalle de productos en una operación (múltiples tipos de pallet). En operaciones unificadas de venta, contiene tanto precios de venta como costos de compra.
 
 | Atributo | Tipo | Requerido | Descripción |
 |----------|------|-----------|-------------|
 | id | UUID | Sí | Identificador único |
 | operacion_id | UUID | Sí | Referencia a la operación |
 | tipo_pallet_id | UUID | Sí | Tipo de pallet |
-| cantidad | Integer | Sí | Cantidad de pallets |
-| precio_unitario | Decimal | No | Precio por unidad (compra o venta) |
-| cantidad_entregada | Integer | Sí | Cantidad efectivamente entregada |
+| cantidad | Integer | Sí | Cantidad solicitada original |
+| precio_unitario | Decimal | No | Precio por unidad (venta o compra según tipo de operación) |
+| precio_venta_unitario | Decimal | No | Precio de venta por unidad (al cliente) - solo para operaciones de venta |
+| precio_compra_unitario | Decimal | No | Precio de compra por unidad (al proveedor) - solo para operaciones de venta |
+| cantidad_entregada | Integer | Sí | Cantidad efectivamente recibida conforme |
+| cantidad_danada | Integer | Sí | Cantidad de pallets dañados o rechazados |
 
 #### **Proveedor / Cliente**
 Contactos comerciales (estructura similar para ambos).
@@ -251,6 +277,37 @@ Control de facturas factorizadas.
 | observaciones | Text | No | Notas adicionales |
 | created_at | Timestamp | Sí | Fecha de registro |
 
+#### **OrdenCompra**
+Orden de compra generada por FSL dirigida a un proveedor.
+
+| Atributo | Tipo | Requerido | Descripción |
+|----------|------|-----------|-------------|
+| id | UUID | Sí | Identificador único |
+| numero | String | Sí | Número correlativo (OC-AAAA-NNNNN) |
+| proveedor_id | UUID | Sí | Proveedor destinatario |
+| fecha | Date | Sí | Fecha de la orden |
+| fecha_entrega | Date | No | Fecha esperada de entrega |
+| direccion_entrega | String | No | Dirección de entrega |
+| observaciones | Text | No | Notas generales |
+| operacion_id | UUID | No | Operación asociada (si aplica) |
+| estado | Enum | Sí | BORRADOR, ENVIADA, RECIBIDA, CANCELADA |
+| pdf_generado | Boolean | Sí | Si se ha generado el PDF |
+| pdf_url | String | No | Ruta del PDF generado |
+| created_at | Timestamp | Sí | Fecha de creación |
+| updated_at | Timestamp | Sí | Última modificación |
+
+#### **OrdenCompraLinea**
+Líneas de productos de una orden de compra.
+
+| Atributo | Tipo | Requerido | Descripción |
+|----------|------|-----------|-------------|
+| id | UUID | Sí | Identificador único |
+| orden_compra_id | UUID | Sí | Referencia a la orden de compra |
+| tipo_pallet_id | UUID | Sí | Tipo de pallet |
+| cantidad | Integer | Sí | Cantidad solicitada |
+| precio_unitario | Decimal | No | Precio por unidad (opcional) |
+| descripcion | String | No | Descripción adicional |
+
 #### **TipoPallet**
 Catálogo de tipos de pallet que maneja la empresa.
 
@@ -290,9 +347,9 @@ Usuario del sistema (single-user en MVP).
                      │   TipoPallet    │
                      │ (Verde, Rústico,│
                      │  Certificado)   │
-                     └────────┬────────┘
-                              │
-                              │
+                     └───────┬─────────┘
+                             │
+                             │
 ┌──────────────┐              │              ┌──────────────┐
 │  Proveedor   │              │              │   Cliente    │
 └──────┬───────┘              │              └──────┬───────┘
@@ -326,6 +383,31 @@ Usuario del sistema (single-user en MVP).
                   │ - monto      │
                   │ - fecha      │
                   └──────────────┘
+
+       ┌──────────────┐
+       │  Proveedor   │
+       └──────┬───────┘
+              │ (N:1)
+              │
+              ▼
+       ┌──────────────────────┐
+       │   OrdenCompra        │
+       ├──────────────────────┤
+       │ - numero (OC-YYYY-N) │
+       │ - estado             │
+       │ - pdf_generado       │
+       │ - fecha              │
+       └──────────┬───────────┘
+                  │
+                  │ (1:N)
+                  ▼
+       ┌──────────────────────┐
+       │ OrdenCompraLinea     │
+       ├──────────────────────┤
+       │ - tipo_pallet        │
+       │ - cantidad           │
+       │ - precio_unitario    │
+       └──────────────────────┘
 ```
 
 **Principios del modelo v2.0:**
@@ -358,9 +440,9 @@ CERRADA    → Operación completamente finalizada
 
 | Tipo Operación | Documentos Obligatorios |
 |----------------|------------------------|
-| COMPRA | Orden de Compra, Guía de Recepción |
-| VENTA_DIRECTA | Guía de Despacho, Factura |
-| VENTA_COMISION | Guía de Despacho, Factura |
+| COMPRA | Orden de Compra (OC de FSL al proveedor), Guía de Recepción |
+| VENTA_DIRECTA | Orden de Compra del Cliente (OC del cliente a FSL), Guía de Despacho, Factura |
+| VENTA_COMISION | Orden de Compra del Cliente (OC del cliente a FSL), Guía de Despacho, Factura |
 
 Si el producto requiere certificación (Pallet Certificado):
 - Agregar **Certificado NIMF-15** como obligatorio
@@ -382,9 +464,24 @@ Todas las operaciones siguen el mismo ciclo simple:
 │                                                                                     │
 │  1. CREAR OPERACIÓN                                                                 │
 │     Usuario ingresa:                                                                │
-│     • Tipo (Compra / Venta Directa / Venta con Comisión)                           │
-│     • Proveedor o Cliente                                                           │
-│     • Productos (tipo pallet, cantidad, precio)                                     │
+│     Para operaciones de VENTA (unificadas):                                        │
+│     • Tipo (Venta Directa / Venta con Comisión)                                     │
+│     • Cliente (obligatorio)                                                         │
+│     • Proveedor (obligatorio - proveedor del cual FSL compra)                       │
+│     • Orden de Compra del Cliente - Número de OC que el cliente emitió a FSL       │
+│     • Productos con:                                                                │
+│       - Tipo pallet y cantidad                                                      │
+│       - Precio de venta unitario (al cliente)                                       │
+│       - Precio de compra unitario (al proveedor)                                    │
+│     • Fecha y dirección de entrega                                                   │
+│     • Generar OC a proveedor - Sistema genera PDF y asocia a operación             │
+│     • Sistema calcula automáticamente:                                             │
+│       - Total venta, Total compra, Margen bruto, Margen %                          │
+│                                                                                     │
+│     Para operaciones de COMPRA (sin venta asociada):                                │
+│     • Tipo: Compra                                                                  │
+│     • Proveedor (obligatorio)                                                       │
+│     • Productos (tipo pallet, cantidad, precio de compra)                           │
 │     • Fecha y dirección                                                             │
 │                                                                                     │
 │     ──────────────────────────────────────────────────────────────────────────────  │
@@ -400,8 +497,12 @@ Todas las operaciones siguen el mismo ciclo simple:
 │     ──────────────────────────────────────────────────────────────────────────────  │
 │                                                                                     │
 │  3. REGISTRAR FACTURACIÓN Y PAGOS                                                   │
-│     • Usuario adjunta factura                                                       │
-│     • Usuario registra pagos (fecha, monto, método)                                 │
+│     • Usuario adjunta factura (de FSL al cliente, si es venta)                      │
+│     • Usuario registra pagos:                                                       │
+│       - Cobro a cliente (precio de venta total) - para operaciones de venta          │
+│       - Pago a proveedor (costo de compra total) - para operaciones de venta        │
+│       - Pago a proveedor (costo total) - para operaciones de compra                 │
+│       - Pago de flete (si aplica)                                                   │
 │     • Si aplica, registra factoring                                                 │
 │                                                                                     │
 │     Estado Financiero:                                                              │
@@ -425,11 +526,17 @@ Aunque el flujo es universal, cada tipo tiene particularidades:
 #### **A) Operación tipo COMPRA**
 
 ```
-Usuario registra compra → Adjunta documentos → Registra pago a proveedor
+Usuario registra compra directa a proveedor → FSL genera OC a proveedor → 
+Adjunta documentos → Registra pago a proveedor
 ```
 
+**Contexto operativo:**
+- Esta operación se origina cuando FSL necesita comprar pallets a un proveedor sin venta asociada
+- FSL emite su propia orden de compra al proveedor
+- No hay cliente asociado (solo compra)
+
 **Documentos obligatorios:**
-- Orden de Compra
+- Orden de Compra (OC de FSL al proveedor)
 - Guía de recepción/traslado
 
 **Pagos asociados:**
@@ -442,37 +549,84 @@ Usuario registra compra → Adjunta documentos → Registra pago a proveedor
 
 ---
 
-#### **B) Operación tipo VENTA_DIRECTA**
+#### **B) Operación tipo VENTA_DIRECTA (Operación Unificada)**
 
 ```
-Usuario registra venta → Adjunta documentos → Registra factura y cobro
+Cliente emite OC a FSL → Usuario crea operación unificada con:
+  • Cliente y OC del cliente
+  • Proveedor y OC generada por FSL
+  • Productos con precios de venta Y costos de compra
+→ Adjunta documentos → Registra cobro a cliente Y pago a proveedor
 ```
+
+**Contexto operativo:**
+- El cliente primero emite una orden de compra dirigida a FSL
+- FSL crea **una sola operación unificada** que contiene:
+  - **Venta al cliente**: Cliente, OC del cliente, precios de venta
+  - **Compra al proveedor**: Proveedor, OC generada por FSL, costos de compra
+- FSL genera su orden de compra (PDF) al proveedor y la asocia a la operación
+- Los proveedores despachan directamente al cliente final
+- **Márgenes calculados automáticamente**: Diferencia entre precios de venta y costos de compra
+
+**Estructura de la operación:**
+- `cliente_id`: Cliente que compra (obligatorio)
+- `proveedor_id`: Proveedor del cual FSL compra (obligatorio)
+- `orden_compra_cliente`: Número de OC que el cliente emitió a FSL
+- `orden_compra_generada_id`: Referencia a la OC generada por FSL al proveedor
+- `OperacionLinea`: Cada línea contiene:
+  - `precio_venta_unitario`: Precio al cliente
+  - `precio_compra_unitario`: Costo al proveedor
+  - `margen_unitario`: Calculado automáticamente (venta - compra)
+
+**Cálculos automáticos:**
+- Total venta = Σ(cantidad × precio_venta_unitario)
+- Total compra = Σ(cantidad × precio_compra_unitario)
+- Margen bruto = Total venta - Total compra
+- Margen porcentual = (Margen bruto / Total venta) × 100
 
 **Documentos obligatorios:**
+- Orden de Compra del Cliente (OC que el cliente emitió a FSL)
+- Orden de Compra de FSL (OC generada y enviada al proveedor)
 - Guía de despacho
-- Factura
+- Factura (de FSL al cliente)
 - Certificado NIMF-15 (solo si vende pallets certificados)
 
 **Pagos asociados:**
-- Cobro a cliente
+- **Cobro a cliente** (precio de venta total)
+- **Pago a proveedor** (costo de compra total)
 - Pago de flete (si FSL paga el transporte)
 
 **Estado completo cuando:**
 - ✅ Todos los documentos presentes
 - ✅ Factura emitida
-- ✅ Cobro registrado
+- ✅ Cobro a cliente registrado
+- ✅ Pago a proveedor registrado
 
 **Opcional:** Puede registrar factoring si la factura se factorizó
 
 ---
 
-#### **C) Operación tipo VENTA_COMISION**
+#### **C) Operación tipo VENTA_COMISION (Operación Unificada)**
 
 ```
-Usuario registra venta → Adjunta documentos → Registra comisión cobrada
+Cliente emite OC a FSL → Usuario crea operación unificada con:
+  • Cliente y OC del cliente
+  • Proveedor y OC generada por FSL
+  • Productos con costos de compra
+→ Adjunta documentos → Registra comisión cobrada
 ```
+
+**Contexto operativo:**
+- El cliente primero emite una orden de compra dirigida a FSL
+- FSL crea **una sola operación** que contiene:
+  - **Venta al cliente**: Cliente, OC del cliente
+  - **Compra al proveedor**: Proveedor, OC generada por FSL, costos de compra
+- El proveedor factura directamente al cliente, y FSL recibe una comisión
+- FSL registra la comisión como cobro
 
 **Documentos obligatorios:**
+- Orden de Compra del Cliente (OC que el cliente emitió a FSL)
+- Orden de Compra de FSL (OC generada y enviada al proveedor)
 - Guía de despacho
 - Factura (emitida por el proveedor al cliente)
 - Certificado NIMF-15 (si aplica)
@@ -517,7 +671,9 @@ El corazón del sistema es detectar automáticamente qué falta:
 1. Si falta documento obligatorio → 🔴 Documento faltante
 2. Si factura emitida pero no pagada → 🟡 Pago pendiente
 3. Si pallet certificado sin NIMF-15 → 🔴 Certificado faltante
-4. Si todo completo y cerrado → 🟢 OK
+4. Si cantidad entregada < cantidad solicitada → 🟡 Entrega parcial
+5. Si hay pallets dañados registrados → ⚠️ Alerta de merma
+6. Si todo completo y cerrado → 🟢 OK
 
 ---
 
@@ -551,6 +707,99 @@ Caso especial: cuando se factoriza una factura de venta.
 
 ---
 
+### 5.5 Manejo de Entregas Parciales y Pallets Dañados
+
+Este flujo aborda la realidad de que un pedido puede entregarse en varias tandas y que pueden ocurrir daños durante el traslado.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               FLUJO DE ENTREGAS PARCIALES Y DAÑOS                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. REGISTRO DE ENTREGA (Guía)                                              │
+│     Usuario sube guía y registra:                                           │
+│     • Cantidad declarada en guía (ej: 1000)                                 │
+│     • Cantidad dañada/rechazada (ej: 10)                                    │
+│                                                                             │
+│  2. ACTUALIZACIÓN DE SALDOS                                                 │
+│     Sistema calcula:                                                        │
+│     • Cantidad Entregada Conforme = 990                                     │
+│     • Cantidad Dañada Acumulada = 10                                        │
+│     • Saldo Pendiente = Original - Entregada Conforme                       │
+│                                                                             │
+│  3. REPOSICIÓN DE DAÑADOS                                                   │
+│     Si hay 10 pallets dañados que el cliente rechazó:                       │
+│     • FSL debe realizar una nueva compra de 10 pallets a un proveedor       │
+│     • Se asocia a la misma operación de venta original                      │
+│     • Se registra una nueva entrega (guía) por esos 10 pallets              │
+│                                                                             │
+│  4. CIERRE                                                                  │
+│     La operación solo puede cerrarse cuando la suma de las entregas         │
+│     conformes iguala a la cantidad solicitada original.                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 5.6 Flujo de Generación de Orden de Compra
+
+Proceso para crear y generar una orden de compra en PDF dirigida a un proveedor.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    FLUJO DE GENERACIÓN DE ORDEN DE COMPRA                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. CREAR ORDEN DE COMPRA                                                   │
+│     Usuario ingresa:                                                        │
+│     • Proveedor destinatario                                                │
+│     • Fecha de la orden                                                     │
+│     • Fecha esperada de entrega (opcional)                                 │
+│     • Dirección de entrega                                                  │
+│     • Productos (tipo pallet, cantidad, precio opcional)                    │
+│     • Observaciones                                                         │
+│                                                                             │
+│     Estado inicial: BORRADOR                                                 │
+│                                                                             │
+│  2. GENERAR PDF                                                              │
+│     Usuario presiona "Generar PDF":                                         │
+│     • Sistema genera número secuencial (OC-2026-00001)                      │
+│     • Sistema crea PDF con formato profesional                              │
+│     • PDF incluye:                                                          │
+│       - Datos de FSL (razón social, RUT, dirección)                        │
+│       - Datos del proveedor                                                 │
+│       - Número de OC y fecha                                                │
+│       - Tabla de productos (tipo, cantidad, precio, subtotal)               │
+│       - Total general                                                       │
+│       - Observaciones                                                       │
+│     • PDF se guarda en el sistema                                           │
+│     • Estado cambia a ENVIADA                                               │
+│                                                                             │
+│  3. ENVÍO AL PROVEEDOR                                                       │
+│     Usuario descarga el PDF y lo envía al proveedor (email, WhatsApp, etc.) │
+│     • El PDF está listo para ser enviado                                    │
+│     • Se puede asociar la OC a una operación existente                      │
+│                                                                             │
+│  4. SEGUIMIENTO                                                              │
+│     • Usuario puede ver todas las OC generadas                               │
+│     • Puede marcar como RECIBIDA cuando el proveedor confirma               │
+│     • Puede cancelar si es necesario                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Características del PDF:**
+- Formato profesional con logo de FSL (si está disponible)
+- Número secuencial visible (OC-2026-00001)
+- Datos completos del proveedor
+- Tabla detallada de productos
+- Totales calculados automáticamente
+- Fecha de emisión y fecha esperada de entrega
+- Observaciones y condiciones
+
+---
+
 ## 6. Reglas de Negocio v2.0
 
 ### 6.1 Reglas de Operaciones
@@ -562,56 +811,77 @@ Caso especial: cuando se factoriza una factura de venta.
 | RN-03 | Número de operación es secuencial: OP-2026-00001 en adelante | Sistema genera automático |
 | RN-04 | No se puede eliminar operación con documentos o pagos asociados | Validar referencias |
 | RN-05 | Operación COMPRA requiere proveedor obligatorio | Validar al crear |
-| RN-06 | Operación VENTA_* requiere cliente obligatorio | Validar al crear |
-| RN-07 | Operación VENTA_COMISION requiere proveedor Y cliente | Validar al crear |
+| RN-06 | Operación VENTA_DIRECTA requiere cliente Y proveedor obligatorios | Validar al crear (operación unificada) |
+| RN-07 | Operación VENTA_COMISION requiere proveedor Y cliente obligatorios | Validar al crear (operación unificada) |
+| RN-07B | Operación VENTA_* debe tener precios de venta Y compra en las líneas | Validar que ambas existan |
+| RN-07C | Margen no puede ser negativo (precio venta >= precio compra) | Validar cálculo de margen |
+| RN-07D | OC generada debe asociarse a la operación de venta | Vincular orden_compra_generada_id |
 | RN-08 | El cierre de operación requiere una Observación de Cierre | Campo obligatorio al cambiar a CERRADA |
+| RN-09 | Operación VENTA_* puede incluir número de OC del cliente | Campo opcional pero recomendado para trazabilidad |
+| RN-10 | Los pallets dañados informados en guías deben ser repuestos | Requiere nueva compra/entrega para completar saldo |
+| RN-11 | La cantidad entregada conforme no puede superar la solicitada | Validar suma de guías conforme |
+| RN-12 | Número de OC es secuencial: OC-2026-00001 en adelante | Sistema genera automático al generar PDF |
+| RN-13 | OC debe tener al menos una línea de producto | Validar antes de generar PDF |
+| RN-14 | OC requiere proveedor obligatorio | Validar al crear |
+| RN-15 | Solo OC en estado BORRADOR puede ser editada | Validar estado antes de editar |
+| RN-16 | PDF solo se genera una vez por OC | Validar pdf_generado antes de regenerar |
 
 ### 6.2 Reglas de Documentos
 
 | ID | Regla | Validación |
 |----|-------|------------|
-| RN-10 | Documentos obligatorios dependen del tipo de operación | Ver matriz de documentos obligatorios |
-| RN-11 | Sistema detecta automáticamente documentos faltantes | Actualizar estado_documental |
-| RN-12 | Solo se aceptan archivos PDF, JPG, PNG | Validar tipo de archivo |
-| RN-13 | Tamaño máximo de archivo: 10 MB | Validar tamaño |
-| RN-14 | Operación con pallet certificado requiere NIMF-15 obligatorio | Validar según tipo de producto |
-| RN-15 | Documentos pueden tener número y fecha opcional | Campos opcionales |
+| RN-17 | Documentos obligatorios dependen del tipo de operación | Ver matriz de documentos obligatorios |
+| RN-18 | Sistema detecta automáticamente documentos faltantes | Actualizar estado_documental |
+| RN-19 | Solo se aceptan archivos PDF, JPG, PNG | Validar tipo de archivo |
+| RN-20 | Tamaño máximo de archivo: 10 MB | Validar tamaño |
+| RN-21 | Operación con pallet certificado requiere NIMF-15 obligatorio | Validar según tipo de producto |
+| RN-22 | Documentos pueden tener número y fecha opcional | Campos opcionales |
 
 ### 6.3 Reglas de Pagos
 
 | ID | Regla | Validación |
 |----|-------|------------|
-| RN-20 | Pago debe estar asociado a una operación | Referencia obligatoria |
-| RN-21 | Monto de pago debe ser mayor a cero | Validar monto |
-| RN-22 | Fecha de pago no puede ser futura | Validar fecha |
-| RN-23 | Sistema actualiza estado financiero según pagos | Actualizar automático |
-| RN-24 | Múltiples pagos permitidos (pagos parciales) | Suma total de pagos |
+| RN-23 | Pago debe estar asociado a una operación | Referencia obligatoria |
+| RN-24 | Monto de pago debe ser mayor a cero | Validar monto |
+| RN-25 | Fecha de pago no puede ser futura | Validar fecha |
+| RN-26 | Sistema actualiza estado financiero según pagos | Actualizar automático |
+| RN-27 | Múltiples pagos permitidos (pagos parciales) | Suma total de pagos |
 
 ### 6.4 Reglas de Factoring
 
 | ID | Regla | Validación |
 |----|-------|------------|
-| RN-30 | Solo operaciones de venta pueden factorizarse | Validar tipo de operación |
-| RN-31 | Operación debe tener factura antes de factorizar | Validar documento FACTURA presente |
-| RN-32 | Monto adelantado no puede ser mayor al monto de la factura | Validar montos |
-| RN-33 | Una operación puede factorizarse solo una vez | Validar unicidad |
+| RN-28 | Solo operaciones de venta pueden factorizarse | Validar tipo de operación |
+| RN-29 | Operación debe tener factura antes de factorizar | Validar documento FACTURA presente |
+| RN-30 | Monto adelantado no puede ser mayor al monto de la factura | Validar montos |
+| RN-31 | Una operación puede factorizarse solo una vez | Validar unicidad |
 
-### 6.5 Reglas de Proveedores y Clientes
+### 6.5 Reglas de Órdenes de Compra
 
 | ID | Regla | Validación |
 |----|-------|------------|
-| RN-40 | RUT debe ser válido (dígito verificador) y único | Validar formato y duplicados |
+| RN-32 | OC debe tener al menos una línea de producto | Validar antes de generar PDF |
+| RN-33 | OC requiere proveedor obligatorio | Validar al crear |
+| RN-34 | Solo OC en estado BORRADOR puede ser editada | Validar estado antes de editar |
+| RN-35 | PDF solo se genera una vez por OC | Validar pdf_generado antes de regenerar |
+| RN-36 | Número de OC es secuencial: OC-2026-00001 en adelante | Sistema genera automático al generar PDF |
+
+### 6.6 Reglas de Proveedores y Clientes
+
+| ID | Regla | Validación |
+|----|-------|------------|
+| RN-40 | RUT debe ser válido (dígito verificador) y único. Se almacena sin puntos, solo con guión (ej: `77442030-4`) | Validar formato y duplicados |
 | RN-41 | Solo se puede operar con contactos activos | Filtrar en selectores |
 | RN-42 | No se puede desactivar contacto con operaciones abiertas | Validar antes de desactivar |
 
-### 6.6 Reglas de Tipos de Pallet
+### 6.7 Reglas de Tipos de Pallet
 
 | ID | Regla | Validación |
 |----|-------|------------|
 | RN-50 | Código de pallet debe ser único | Validar duplicados |
 | RN-51 | Si tipo requiere certificación, NIMF-15 es obligatorio | Regla documental |
 
-### 6.7 Reglas de Usuarios
+### 6.8 Reglas de Usuarios
 
 | ID | Regla | Validación |
 |----|-------|------------|
@@ -683,7 +953,42 @@ Indica el avance del proceso de facturación y cobro/pago:
 
 ---
 
-### 7.3 Matriz de Estados Combinados
+### 7.3 Estado de Orden de Compra
+
+Indica el estado del ciclo de vida de una orden de compra generada:
+
+```
+     ┌───────────┐
+     │ BORRADOR  │  ← OC en creación, no enviada
+     └─────┬─────┘
+           │ Usuario genera PDF
+           ▼
+     ┌───────────┐
+     │  ENVIADA  │  ← PDF generado y enviado al proveedor
+     └─────┬─────┘
+           │ Proveedor confirma recepción
+           ▼
+     ┌───────────┐
+     │ RECIBIDA  │  ← Proveedor confirmó recepción
+     └───────────┘
+           │
+           │ Usuario cancela
+           ▼
+     ┌───────────┐
+     │ CANCELADA │  ← OC cancelada
+     └───────────┘
+```
+
+| Estado | Descripción | Visual | Acciones permitidas |
+|--------|-------------|--------|---------------------|
+| BORRADOR | OC en creación, no enviada | ⚪ Gris | Editar, generar PDF, eliminar |
+| ENVIADA | PDF generado y enviado al proveedor | 🟡 Amarillo | Ver PDF, marcar como recibida, cancelar |
+| RECIBIDA | Proveedor confirmó recepción | 🟢 Verde | Ver PDF, asociar a operación |
+| CANCELADA | OC cancelada | 🔴 Rojo | Solo consulta |
+
+---
+
+### 7.4 Matriz de Estados Combinados
 
 Una operación puede estar en diferentes combinaciones de estados:
 
@@ -725,7 +1030,7 @@ def calcular_estado_documental(operacion):
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
-| RF-OP-01 | Crear operación (compra/venta/comisión) | 🔴 Crítica | Formulario unificado con tipo, contacto, productos |
+| RF-OP-01 | Crear operación (compra/venta/comisión) | 🔴 Crítica | Formulario unificado con tipo, contacto, productos, orden de compra del cliente (si es venta) |
 | RF-OP-02 | Editar operación | 🔴 Crítica | Modificar datos básicos, líneas de producto |
 | RF-OP-03 | Ver detalle completo de operación | 🔴 Crítica | Vista con documentos, pagos, estados |
 | RF-OP-04 | Listar operaciones con filtros | 🔴 Crítica | Filtrar por tipo, fecha, contacto, estado |
@@ -784,7 +1089,22 @@ def calcular_estado_documental(operacion):
 | RF-GUIA-03 | Asociar guía a operación existente | 🔴 Crítica | Vínculo N:1 entre guías y operación |
 | RF-GUIA-04 | Adjuntar imagen/PDF de la guía | 🔴 Crítica | Registro visual del documento físico |
 
-### 8.7 Módulo de Contactos (RF-CONT)
+### 8.7 Módulo de Órdenes de Compra (RF-OC) - CORE
+
+| ID | Requerimiento | Prioridad | Descripción |
+|----|---------------|-----------|-------------|
+| RF-OC-01 | Crear orden de compra | 🔴 Crítica | Formulario con proveedor, fecha, productos |
+| RF-OC-02 | Editar orden de compra (solo borrador) | 🔴 Crítica | Modificar datos y líneas de producto |
+| RF-OC-03 | Generar PDF de orden de compra | 🔴 Crítica | Generar PDF profesional con número secuencial |
+| RF-OC-04 | Descargar PDF generado | 🔴 Crítica | Descargar PDF para enviar al proveedor |
+| RF-OC-05 | Listar órdenes de compra | 🔴 Crítica | Filtrar por proveedor, fecha, estado |
+| RF-OC-06 | Ver detalle de orden de compra | 🔴 Crítica | Vista completa con líneas y PDF |
+| RF-OC-07 | Cambiar estado de OC (enviada/recibida/cancelada) | 🟡 Alta | Actualizar estado manualmente |
+| RF-OC-08 | Asociar OC a operación existente | 🟡 Alta | Vincular OC generada con operación |
+| RF-OC-09 | Eliminar OC (solo borrador) | 🟢 Media | Solo si está en estado BORRADOR |
+| RF-OC-10 | Duplicar orden de compra | 🟢 Media | Crear nueva basada en existente |
+
+### 8.8 Módulo de Contactos (RF-CONT)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -793,9 +1113,9 @@ def calcular_estado_documental(operacion):
 | RF-CONT-03 | Editar contacto | 🟡 Alta | Modificar datos existentes |
 | RF-CONT-04 | Activar/desactivar contacto | 🟢 Media | No eliminar, solo desactivar |
 | RF-CONT-05 | Ver operaciones de contacto | 🟡 Alta | Historial de operaciones |
-| RF-CONT-06 | Validación de RUT | 🟡 Alta | Dígito verificador, unicidad |
+| RF-CONT-06 | Validación de RUT | 🟡 Alta | Dígito verificador, unicidad. Normalizar formato (eliminar puntos, mantener guión). Almacenar sin puntos (ej: `77442030-4`) |
 
-### 8.8 Módulo de Productos (RF-PROD)
+### 8.9 Módulo de Productos (RF-PROD)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -803,7 +1123,7 @@ def calcular_estado_documental(operacion):
 | RF-PROD-02 | Crear tipo de pallet | 🟢 Baja | Para futuros productos |
 | RF-PROD-03 | Configurar si requiere certificación | 🟡 Alta | NIMF-15 obligatorio |
 
-### 8.9 Módulo de Reportes (RF-REP)
+### 8.10 Módulo de Reportes (RF-REP)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
@@ -813,14 +1133,15 @@ def calcular_estado_documental(operacion):
 | RF-REP-04 | Trazabilidad por número de operación | 🟡 Alta | Documentos, pagos, historial |
 | RF-REP-05 | Exportar a Excel/CSV | 🟢 Media | Descargar reportes |
 
-### 8.10 Módulo de Autenticación (RF-AUTH)
+### 8.11 Módulo de Autenticación (RF-AUTH)
 
 | ID | Requerimiento | Prioridad | Descripción |
 |----|---------------|-----------|-------------|
-| RF-AUTH-01 | Login con email y contraseña | 🔴 Crítica | Autenticación básica |
-| RF-AUTH-02 | Logout | 🔴 Crítica | Cerrar sesión |
-| RF-AUTH-03 | Cambiar contraseña | 🟡 Alta | Usuario puede cambiar su contraseña |
-| RF-AUTH-04 | Recordar sesión | 🟢 Media | "Mantener sesión iniciada" |
+| RF-AUTH-01 | Login con email y contraseña | 🔴 Crítica | Auth.js con Credentials Provider, sesiones con cookies HTTP-only |
+| RF-AUTH-02 | Logout | 🔴 Crítica | Cerrar sesión de Auth.js |
+| RF-AUTH-03 | Cambiar contraseña | 🟡 Alta | Usuario puede cambiar su contraseña, hash con bcrypt (salt rounds: 10) |
+| RF-AUTH-04 | Recordar sesión | 🟢 Media | "Mantener sesión iniciada" mediante cookies persistentes |
+| RF-AUTH-05 | Hash seguro de contraseñas | 🔴 Crítica | Usar bcrypt con Node.js crypto, salt rounds: 10, nunca texto plano |
 
 ---
 
@@ -1058,7 +1379,7 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 | **Pallet Rústico (PR)** | Pallet de madera con acabado básico |
 | **Pallet Certificado (PC)** | Pallet con tratamiento fitosanitario certificado (NIMF-15) |
 | **NIMF-15** | Norma Internacional para Medidas Fitosanitarias (tratamiento de madera para exportación) |
-| **RUT** | Rol Único Tributario (identificador fiscal chileno) |
+| **RUT** | Rol Único Tributario (identificador fiscal chileno). Se almacena sin puntos, solo con guión antes del dígito verificador (formato: `12345678-9`). En la UI se puede mostrar con puntos para mejor legibilidad (formato: `12.345.678-9`) |
 | **Factoring** | Operación financiera donde se adelanta el cobro de una factura |
 | **Comisión** | Porcentaje o monto que FSL cobra por intermediar una venta entre proveedor y cliente |
 | **Pendiente** | Algo que falta o no está completo (documento, pago, certificado) |
@@ -1069,6 +1390,11 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 | **Entrega Directa** | Proveedor despacha mercadería directamente al cliente final de FSL |
 | **Control Documental** | Proceso de verificar que todos los documentos estén presentes |
 | **Control Financiero** | Proceso de verificar facturación y pagos |
+| **OC del Cliente** | Orden de Compra que el cliente emite a FSL para solicitar pallets |
+| **OC de FSL** | Orden de Compra que FSL emite a sus proveedores para cumplir con la OC del cliente |
+| **Orden de Compra (OC)** | Documento que formaliza la solicitud de compra de productos |
+| **OC Generada** | Orden de Compra creada y generada en PDF desde el sistema |
+| **Número Secuencial OC** | Formato OC-YYYY-NNNNN generado automáticamente por el sistema |
 
 ---
 
@@ -1080,7 +1406,7 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  🌲 Forestal Santa Lucía                             [Usuario] [Salir]      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  [Operaciones] [Contactos] [Reportes]                                       │
+│  [Operaciones] [Órdenes de Compra] [Contactos] [Reportes]                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   🔴 REQUIEREN ATENCIÓN (8)                                                 │
@@ -1107,6 +1433,8 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 │   ⚡ ACCIONES RÁPIDAS                                                        │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │ [+ Nueva Compra]  [+ Nueva Venta]  [+ Venta con Comisión]              ││
+│  │                                                                         ││
+│  │ [+ Nueva Orden de Compra]  ← Generar OC a proveedor                    ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1206,7 +1534,8 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 | Backend | **Next.js API Routes** | API y UI en mismo proyecto |
 | ORM | **Prisma** | Type-safe, migraciones automáticas |
 | Base de Datos | **PostgreSQL** | Relacional, robusto, gratis (Supabase/Railway) |
-| Autenticación | **NextAuth.js v5** | Simple, integrado |
+| Autenticación | **Auth.js (NextAuth.js v5)** | Credentials Provider, sesiones con cookies HTTP-only |
+| Hash Contraseñas | **bcrypt** con Node.js `crypto` | Salt rounds: 10, nunca texto plano |
 | Storage (docs) | **Supabase Storage** o S3 | Escalable, económico |
 | Hosting | **Vercel** (free tier) | Deploy automático, zero config |
 
@@ -1262,6 +1591,10 @@ Pero si el equipo prefiere **Python**, la opción HTMX es excelente y cumple per
 | 1.1 | 2026-01-09 | Arquitectura | Confirmación modelo sin bodega física |
 | 2.0 | 2026-01-12 | Arquitectura | Rediseño completo: Operaciones unificadas |
 | **2.1** | **2026-01-12** | **Arquitectura** | **Alcance 100% Cerrado:** <br>• Correlativo inicia en OP-2026-00001 <br>• Cierre requiere observación obligatoria <br>• Se elimina impresión de guías (solo registro) <br>• Captura de datos de transporte (Chofer/Patente) <br>• Validación de supuestos operativos |
+| **2.2** | **2026-01-15** | **Arquitectura** | **Flujo operativo completo:** <br>• Cliente emite OC a FSL <br>• FSL genera OC a proveedores <br>• Campo orden_compra_cliente en operaciones de venta <br>• OC del cliente como documento obligatorio en ventas <br>• Actualización de flujos de negocio y reglas |
+| **2.3** | **2026-01-15** | **Arquitectura** | **Entregas parciales y mermas:** <br>• Registro de pallets dañados/rechazados <br>• Seguimiento de entregas parciales por operación <br>• Nueva lógica de reposición de pallets dañados |
+| **2.4** | **2026-01-15** | **Arquitectura** | **Generación de Órdenes de Compra:** <br>• Módulo completo de OC con número secuencial (OC-YYYY-NNNNN) <br>• Generación de PDF profesional <br>• Estados de OC (BORRADOR, ENVIADA, RECIBIDA, CANCELADA) <br>• Asociación de OC a operaciones |
+| **2.5** | **2026-01-15** | **Arquitectura** | **Operación Unificada:** <br>• Operaciones de venta incluyen compra asociada en una sola entidad <br>• Precios de venta y compra en las líneas de producto <br>• Cálculo automático de márgenes <br>• Proveedor obligatorio en operaciones de venta <br>• OC generada asociada a la operación |
 
 ---
 

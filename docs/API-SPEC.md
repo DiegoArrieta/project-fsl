@@ -1,8 +1,8 @@
 # API Specification Document - Forestal Santa Lucía
 
-**Versión:** 1.0  
-**Fecha:** 2026-01-12  
-**Basado en:** SDD v2.1, DATABASE-SCHEMA v1.0, UI-SPEC v1.0  
+**Versión:** 1.4  
+**Fecha:** 2026-01-15  
+**Basado en:** SDD v2.5, DATABASE-SCHEMA v1.3, UI-SPEC v1.4  
 **Framework objetivo:** Next.js 14 API Routes (App Router)  
 **Formato:** REST JSON  
 
@@ -17,10 +17,12 @@ Producción:  https://app.forestalsantalucia.cl/api
 ```
 
 ### 1.2 Autenticación
-- **Método:** JWT (JSON Web Token)
-- **Header:** `Authorization: Bearer <token>`
+- **Método:** Auth.js (NextAuth.js v5) con Credentials Provider
+- **Sesiones:** Cookies HTTP-only (seguras)
+- **Header:** `Authorization: Bearer <token>` o cookies de sesión
 - **Duración:** 7 días (configurable)
-- **Refresh:** Automático en cada request válido
+- **Hash de Contraseñas:** Node.js `crypto` con `bcrypt`, salt rounds: 10
+- **Seguridad:** Contraseñas nunca almacenadas en texto plano, siempre hasheadas con bcrypt
 
 ### 1.3 Formato de Respuestas
 
@@ -89,6 +91,8 @@ Producción:  https://app.forestalsantalucia.cl/api
 POST /api/auth/login
 ```
 
+**Nota:** Este endpoint utiliza Auth.js (NextAuth.js v5) con Credentials Provider. La autenticación se maneja mediante sesiones con cookies HTTP-only.
+
 **Request Body:**
 ```json
 {
@@ -98,21 +102,35 @@ POST /api/auth/login
 }
 ```
 
+**Proceso de Autenticación:**
+1. Sistema busca usuario por email en base de datos
+2. Verifica contraseña usando `bcrypt.compare(password, user.password_hash)` (salt rounds: 10)
+3. Si es válida, Auth.js crea sesión segura con cookie HTTP-only
+4. Retorna información del usuario (sin password_hash)
+
 **Response 200:**
 ```json
 {
   "success": true,
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
       "id": "uuid",
       "email": "admin@forestalsantalucia.cl",
       "nombre": "Administrador"
     },
+    "session": {
     "expiresAt": "2026-01-19T10:30:00Z"
+    }
   }
 }
 ```
+
+**Nota de Implementación:**
+- Usar Auth.js Credentials Provider
+- Verificar contraseña con `bcrypt.compare(password, storedHash)`
+- Crear sesión segura con cookies HTTP-only
+- Nunca retornar password_hash en respuestas
+- Contraseñas se hashean con `bcrypt.hash(password, 10)` al crear/actualizar
 
 **Response 401:**
 ```json
@@ -176,7 +194,7 @@ GET /api/auth/me
 PUT /api/auth/password
 ```
 
-**Headers:** `Authorization: Bearer <token>`
+**Headers:** `Authorization: Bearer <token>` o sesión de Auth.js
 
 **Request Body:**
 ```json
@@ -187,6 +205,19 @@ PUT /api/auth/password
 }
 ```
 
+**Validaciones:**
+- `currentPassword`: Debe coincidir con hash almacenado (verificar con `bcrypt.compare(currentPassword, user.password_hash)`)
+- `newPassword`: Mínimo 8 caracteres
+- `confirmPassword`: Debe coincidir con `newPassword`
+- Nueva contraseña se hashea con `bcrypt.hash(newPassword, 10)` antes de guardar
+
+**Proceso:**
+1. Verificar contraseña actual con `bcrypt.compare(currentPassword, user.password_hash)`
+2. Validar nueva contraseña (mínimo 8 caracteres)
+3. Hashear nueva contraseña con `bcrypt.hash(newPassword, 10)`
+4. Actualizar `password_hash` en base de datos
+5. Nunca almacenar contraseña en texto plano
+
 **Response 200:**
 ```json
 {
@@ -196,6 +227,12 @@ PUT /api/auth/password
   }
 }
 ```
+
+**Nota de Implementación:**
+- Usar `bcrypt.hash(newPassword, 10)` para generar hash de nueva contraseña
+- Usar `bcrypt.compare(currentPassword, storedHash)` para verificar contraseña actual
+- Nunca almacenar contraseñas en texto plano
+- Salt rounds: 10 (configuración estándar de seguridad)
 
 ---
 
@@ -295,15 +332,22 @@ GET /api/operaciones
       "cliente": {
         "id": "uuid",
         "razonSocial": "Cermaq Chile S.A.",
-        "rut": "76.xxx.xxx-x"
+        "rut": "76123456-7"
       },
-      "proveedor": null,
+      "proveedor": {
+        "id": "uuid",
+        "razonSocial": "Forestal Andes Ltda.",
+        "rut": "77442030-4"
+      },
       "estadoDocumental": "INCOMPLETA",
       "estadoFinanciero": "FACTURADA",
       "documentosPresentes": 2,
       "documentosRequeridos": 3,
-      "totalOperacion": 7650000,
-      "resumenProductos": "500 Pallet Verde, 50 Pallet Certificado",
+      "totalVenta": 17100000,
+      "totalCompra": 12800000,
+      "margenBruto": 4300000,
+      "margenPorcentual": 25.1,
+      "resumenProductos": "1000 Pallet Verde, 200 Pallet Certificado",
       "createdAt": "2026-01-12T08:30:00Z"
     }
   ],
@@ -337,18 +381,34 @@ GET /api/operaciones/:id
     "fecha": "2026-01-12",
     "cliente": {
       "id": "uuid",
-      "rut": "76.xxx.xxx-x",
+      "rut": "76123456-7",
       "razonSocial": "Cermaq Chile S.A.",
       "nombreFantasia": "Cermaq",
       "direccion": "Puerto Montt",
       "telefono": "65-1234567",
       "email": "contacto@cermaq.cl"
     },
-    "proveedor": null,
+    "proveedor": {
+      "id": "uuid",
+      "rut": "77442030-4",
+      "razonSocial": "FORESTAL ANDES LIMITADA",
+      "nombreFantasia": "Forestal Andes",
+      "direccion": "Camino Freire a Barros Arana KM.2",
+      "comuna": "Freire",
+      "ciudad": "Temuco",
+      "telefono": "45-2378200",
+      "email": "administracion@forestalandes.cl"
+    },
     "estadoDocumental": "INCOMPLETA",
     "estadoFinanciero": "FACTURADA",
     "direccionEntrega": "Puerto Montt, Av. Principal 123",
     "ordenCompraCliente": "OC-36",
+    "ordenCompraGenerada": {
+      "id": "uuid",
+      "numero": "OC-2026-00015",
+      "estado": "ENVIADA",
+      "pdfUrl": "/uploads/ocs/oc-2026-00015.pdf"
+    },
     "observaciones": "Entregar antes de las 14:00",
     "observacionCierre": null,
     "fechaCierre": null,
@@ -361,10 +421,16 @@ GET /api/operaciones/:id
           "nombre": "Pallet Verde",
           "requiereCertificacion": false
         },
-        "cantidad": 500,
-        "cantidadEntregada": 500,
-        "precioUnitario": 13500,
-        "subtotal": 6750000
+        "cantidad": 1000,
+        "cantidadEntregada": 990,
+        "cantidadDanada": 10,
+        "precioUnitario": null,
+        "precioVentaUnitario": 13500,
+        "precioCompraUnitario": 10000,
+        "margenUnitario": 3500,
+        "subtotalVenta": 13500000,
+        "subtotalCompra": 10000000,
+        "margenSubtotal": 3500000
       },
       {
         "id": "uuid",
@@ -374,13 +440,22 @@ GET /api/operaciones/:id
           "nombre": "Pallet Certificado",
           "requiereCertificacion": true
         },
-        "cantidad": 50,
-        "cantidadEntregada": 50,
-        "precioUnitario": 18000,
-        "subtotal": 900000
+        "cantidad": 200,
+        "cantidadEntregada": 200,
+        "cantidadDanada": 0,
+        "precioUnitario": null,
+        "precioVentaUnitario": 18000,
+        "precioCompraUnitario": 14000,
+        "margenUnitario": 4000,
+        "subtotalVenta": 3600000,
+        "subtotalCompra": 2800000,
+        "margenSubtotal": 800000
       }
     ],
-    "totalOperacion": 7650000,
+    "totalVenta": 17100000,
+    "totalCompra": 12800000,
+    "margenBruto": 4300000,
+    "margenPorcentual": 25.1,
     "documentos": [
       {
         "id": "uuid",
@@ -391,7 +466,7 @@ GET /api/operaciones/:id
         "archivoNombre": "guia-95519.pdf",
         "esObligatorio": true,
         "choferNombre": "Joel Manque",
-        "choferRut": "12.345.678-9",
+        "choferRut": "12345678-9",
         "vehiculoPatente": "JHZW23",
         "transportista": "Transportes Curacalco",
         "uploadedAt": "2026-01-12T09:00:00Z"
@@ -450,20 +525,22 @@ POST /api/operaciones
   "tipo": "VENTA_DIRECTA",
   "fecha": "2026-01-12",
   "clienteId": "uuid",
-  "proveedorId": null,
+  "proveedorId": "uuid",
   "direccionEntrega": "Puerto Montt, Av. Principal 123",
   "ordenCompraCliente": "OC-36",
   "observaciones": "Entregar antes de las 14:00",
   "lineas": [
     {
       "tipoPalletId": "uuid",
-      "cantidad": 500,
-      "precioUnitario": 13500
+      "cantidad": 1000,
+      "precioVentaUnitario": 13500,
+      "precioCompraUnitario": 10000
     },
     {
       "tipoPalletId": "uuid",
-      "cantidad": 50,
-      "precioUnitario": 18000
+      "cantidad": 200,
+      "precioVentaUnitario": 18000,
+      "precioCompraUnitario": 14000
     }
   ]
 }
@@ -473,7 +550,8 @@ POST /api/operaciones
 - `tipo`: requerido, enum válido
 - `fecha`: requerido, no futura
 - `clienteId`: requerido si tipo es VENTA_*
-- `proveedorId`: requerido si tipo es COMPRA o VENTA_COMISION
+- `proveedorId`: requerido si tipo es COMPRA o VENTA_* (obligatorio en operaciones unificadas)
+- `ordenCompraCliente`: opcional, recomendado para operaciones de venta (número de OC que el cliente emitió a FSL)
 - `lineas`: al menos 1 línea
 - `lineas[].cantidad`: > 0
 - `lineas[].tipoPalletId`: debe existir y estar activo
@@ -640,6 +718,8 @@ POST /api/operaciones/:operacionId/documentos
 | `choferRut` | string | No | Solo para guías |
 | `vehiculoPatente` | string | No | Solo para guías |
 | `transportista` | string | No | Solo para guías |
+| `cantidadDocumento` | number | No | Cantidad total declarada (para guías) |
+| `cantidadDanada` | number | No | Cantidad de pallets dañados (para guías) |
 | `observaciones` | string | No | Notas adicionales |
 
 **Response 201:**
@@ -686,7 +766,7 @@ GET /api/documentos/:id
     "archivoSize": 245000,
     "esObligatorio": true,
     "choferNombre": "Joel Manque",
-    "choferRut": "12.345.678-9",
+    "choferRut": "12345678-9",
     "vehiculoPatente": "JHZW23",
     "transportista": "Transportes Curacalco",
     "observaciones": null,
@@ -1027,7 +1107,7 @@ GET /api/proveedores
   "data": [
     {
       "id": "uuid",
-      "rut": "77.442.030-4",
+      "rut": "77442030-4",
       "razonSocial": "FORESTAL ANDES LIMITADA",
       "nombreFantasia": "Forestal Andes",
       "direccion": "Camino Freire a Barros Arana KM.2",
@@ -1111,9 +1191,14 @@ POST /api/proveedores
 ```
 
 **Validaciones:**
-- `rut`: requerido, formato válido, dígito verificador, único
+- `rut`: requerido, formato válido (sin puntos, solo guión antes del dígito verificador, ej: `77442030-4`), dígito verificador, único
 - `razonSocial`: requerido
 - `email`: formato válido si se proporciona
+
+**Nota sobre formato de RUT:**
+- El RUT se almacena y se envía en la API **sin puntos**, solo con guión antes del dígito verificador
+- Formato: `12345678-9` (sin puntos)
+- El sistema debe normalizar el RUT al recibirlo (eliminar puntos si los hay)
 
 **Response 201:**
 ```json
@@ -1206,9 +1291,387 @@ PATCH  /api/clientes/:id/estado   # Activar/Desactivar
 
 ---
 
-## 9. Endpoints de Tipos de Pallet
+## 9. Endpoints de Órdenes de Compra
 
-### 9.1 Listar Tipos de Pallet
+### 9.1 Listar Órdenes de Compra
+
+```
+GET /api/ordenes-compra
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query Parameters:**
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `page` | number | Página (default: 1) |
+| `pageSize` | number | Items por página (default: 10, max: 50) |
+| `proveedorId` | uuid | Filtrar por proveedor |
+| `estado` | string | BORRADOR, ENVIADA, RECIBIDA, CANCELADA |
+| `fechaDesde` | date | Fecha inicio (YYYY-MM-DD) |
+| `fechaHasta` | date | Fecha fin (YYYY-MM-DD) |
+| `buscar` | string | Búsqueda por número de OC |
+| `ordenar` | string | fecha_desc (default), fecha_asc, numero |
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "numero": "OC-2026-00015",
+      "proveedor": {
+        "id": "uuid",
+        "razonSocial": "Forestal Andes Ltda.",
+        "rut": "77442030-4"
+      },
+      "fecha": "2026-01-12",
+      "fechaEntrega": "2026-01-20",
+      "estado": "ENVIADA",
+      "pdfGenerado": true,
+      "totalProductos": 2,
+      "totalCantidad": 1200,
+      "totalMonto": 17100000,
+      "createdAt": "2026-01-12T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "total": 12,
+    "page": 1,
+    "pageSize": 10,
+    "totalPages": 2
+  }
+}
+```
+
+---
+
+### 9.2 Obtener Orden de Compra por ID
+
+```
+GET /api/ordenes-compra/:id
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": "OC-2026-00015",
+    "proveedor": {
+      "id": "uuid",
+      "rut": "77442030-4",
+      "razonSocial": "FORESTAL ANDES LIMITADA",
+      "nombreFantasia": "Forestal Andes",
+      "direccion": "Camino Freire a Barros Arana KM.2",
+      "comuna": "Freire",
+      "ciudad": "Temuco",
+      "telefono": "45-2378200",
+      "email": "administracion@forestalandes.cl"
+    },
+    "fecha": "2026-01-12",
+    "fechaEntrega": "2026-01-20",
+    "direccionEntrega": "Puerto Montt, Av. Principal 123",
+    "observaciones": "Entregar antes de las 14:00",
+    "operacionId": null,
+    "estado": "ENVIADA",
+    "pdfGenerado": true,
+    "pdfUrl": "/uploads/ocs/oc-2026-00015.pdf",
+    "lineas": [
+      {
+        "id": "uuid",
+        "tipoPallet": {
+          "id": "uuid",
+          "codigo": "PV",
+          "nombre": "Pallet Verde",
+          "requiereCertificacion": false
+        },
+        "cantidad": 1000,
+        "precioUnitario": 13500,
+        "subtotal": 13500000,
+        "descripcion": null
+      },
+      {
+        "id": "uuid",
+        "tipoPallet": {
+          "id": "uuid",
+          "codigo": "PC",
+          "nombre": "Pallet Certificado",
+          "requiereCertificacion": true
+        },
+        "cantidad": 200,
+        "precioUnitario": 18000,
+        "subtotal": 3600000,
+        "descripcion": null
+      }
+    ],
+    "totalMonto": 17100000,
+    "createdAt": "2026-01-12T10:00:00Z",
+    "updatedAt": "2026-01-12T10:30:00Z"
+  }
+}
+```
+
+---
+
+### 9.3 Crear Orden de Compra
+
+```
+POST /api/ordenes-compra
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "proveedorId": "uuid",
+  "fecha": "2026-01-12",
+  "fechaEntrega": "2026-01-20",
+  "direccionEntrega": "Puerto Montt, Av. Principal 123",
+  "observaciones": "Entregar antes de las 14:00",
+  "operacionId": null,
+  "lineas": [
+    {
+      "tipoPalletId": "uuid",
+      "cantidad": 1000,
+      "precioUnitario": 13500,
+      "descripcion": null
+    },
+    {
+      "tipoPalletId": "uuid",
+      "cantidad": 200,
+      "precioUnitario": 18000,
+      "descripcion": null
+    }
+  ]
+}
+```
+
+**Validaciones:**
+- `proveedorId`: requerido, debe existir y estar activo
+- `fecha`: requerido, no futura
+- `fechaEntrega`: opcional, debe ser >= fecha
+- `lineas`: al menos 1 línea
+- `lineas[].cantidad`: > 0
+- `lineas[].tipoPalletId`: debe existir y estar activo
+
+**Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": null,
+    "estado": "BORRADOR",
+    "pdfGenerado": false,
+    "message": "Orden de compra creada correctamente"
+  }
+}
+```
+
+---
+
+### 9.4 Actualizar Orden de Compra
+
+```
+PUT /api/ordenes-compra/:id
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Validaciones:**
+- Solo se puede editar si `estado` = BORRADOR
+- No se puede editar si `pdfGenerado` = true
+
+**Request Body:**
+```json
+{
+  "fecha": "2026-01-12",
+  "fechaEntrega": "2026-01-21",
+  "direccionEntrega": "Puerto Montt, Av. Principal 456",
+  "observaciones": "Actualizado: entregar a las 16:00",
+  "lineas": [
+    {
+      "id": "uuid-existente",
+      "cantidad": 1200,
+      "precioUnitario": 13500
+    },
+    {
+      "tipoPalletId": "uuid-nuevo",
+      "cantidad": 100,
+      "precioUnitario": 15000
+    }
+  ]
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": null,
+    "message": "Orden de compra actualizada correctamente"
+  }
+}
+```
+
+---
+
+### 9.5 Generar PDF de Orden de Compra
+
+```
+POST /api/ordenes-compra/:id/generar-pdf
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Validaciones:**
+- OC debe tener al menos una línea de producto
+- OC no debe tener PDF generado previamente
+- OC debe estar en estado BORRADOR
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": "OC-2026-00015",
+    "estado": "ENVIADA",
+    "pdfGenerado": true,
+    "pdfUrl": "/uploads/ocs/oc-2026-00015.pdf",
+    "message": "PDF generado correctamente"
+  }
+}
+```
+
+**Proceso:**
+1. Sistema genera número secuencial (OC-YYYY-NNNNN)
+2. Sistema crea PDF con formato profesional
+3. PDF se guarda en `/uploads/ocs/`
+4. Estado cambia automáticamente a ENVIADA
+5. Se retorna URL del PDF para descarga
+
+---
+
+### 9.6 Descargar PDF de Orden de Compra
+
+```
+GET /api/ordenes-compra/:id/pdf
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:** Archivo PDF binario con headers apropiados
+```
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="OC-2026-00015.pdf"
+```
+
+**Validaciones:**
+- OC debe tener PDF generado (`pdfGenerado` = true)
+
+---
+
+### 9.7 Cambiar Estado de Orden de Compra
+
+```
+PATCH /api/ordenes-compra/:id/estado
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "estado": "RECIBIDA"
+}
+```
+
+**Validaciones:**
+- `estado`: requerido, enum válido
+- No se puede cambiar a BORRADOR si ya tiene PDF generado
+- No se puede cancelar si está RECIBIDA
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": "OC-2026-00015",
+    "estado": "RECIBIDA",
+    "message": "Estado actualizado correctamente"
+  }
+}
+```
+
+---
+
+### 9.8 Asociar Orden de Compra a Operación
+
+```
+PATCH /api/ordenes-compra/:id/asociar-operacion
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "operacionId": "uuid"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "numero": "OC-2026-00015",
+    "operacionId": "uuid",
+    "message": "Orden de compra asociada correctamente"
+  }
+}
+```
+
+---
+
+### 9.9 Eliminar Orden de Compra
+
+```
+DELETE /api/ordenes-compra/:id
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Validaciones:**
+- Solo se puede eliminar si `estado` = BORRADOR
+- No se puede eliminar si tiene PDF generado
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Orden de compra eliminada correctamente"
+  }
+}
+```
+
+---
+
+## 10. Endpoints de Tipos de Pallet
+
+### 10.1 Listar Tipos de Pallet
 
 ```
 GET /api/tipos-pallet
@@ -1256,7 +1719,7 @@ GET /api/tipos-pallet
 
 ---
 
-### 9.2 Crear Tipo de Pallet
+### 10.2 Crear Tipo de Pallet
 
 ```
 POST /api/tipos-pallet
@@ -1288,9 +1751,9 @@ POST /api/tipos-pallet
 
 ---
 
-## 10. Endpoints de Reportes
+## 11. Endpoints de Reportes
 
-### 10.1 Reporte de Operaciones por Período
+### 11.1 Reporte de Operaciones por Período
 
 ```
 GET /api/reportes/operaciones
@@ -1343,7 +1806,7 @@ GET /api/reportes/operaciones
 
 ---
 
-### 10.2 Reporte de Pendientes
+### 11.2 Reporte de Pendientes
 
 ```
 GET /api/reportes/pendientes
@@ -1389,7 +1852,7 @@ GET /api/reportes/pendientes
 
 ---
 
-### 10.3 Reporte por Contacto
+### 11.3 Reporte por Contacto
 
 ```
 GET /api/reportes/contacto/:id
@@ -1440,7 +1903,7 @@ GET /api/reportes/contacto/:id
 
 ---
 
-### 10.4 Exportar Operaciones
+### 11.4 Exportar Operaciones
 
 ```
 GET /api/reportes/exportar
@@ -1464,15 +1927,16 @@ Content-Disposition: attachment; filename="operaciones-2026-01.csv"
 
 ---
 
-## 11. Resumen de Endpoints
+## 12. Resumen de Endpoints
 
-### Total: 35 Endpoints
+### Total: 44 Endpoints
 
 | Módulo | Endpoints | Métodos |
 |--------|-----------|---------|
 | Auth | 4 | POST, GET, PUT |
 | Dashboard | 1 | GET |
 | Operaciones | 6 | GET, POST, PUT, DELETE |
+| Órdenes de Compra | 9 | GET, POST, PUT, PATCH, DELETE |
 | Documentos | 4 | GET, POST, DELETE |
 | Pagos | 4 | GET, POST, PUT, DELETE |
 | Factoring | 4 | GET, POST, PUT, DELETE |
@@ -1485,37 +1949,52 @@ Content-Disposition: attachment; filename="operaciones-2026-01.csv"
 
 | Prioridad | Endpoints | Descripción |
 |-----------|-----------|-------------|
-| 🔴 Crítica | 15 | Auth, CRUD Operaciones, Documentos, Dashboard |
+| 🔴 Crítica | 24 | Auth, CRUD Operaciones, CRUD OC, Documentos, Dashboard |
 | 🟡 Alta | 12 | Pagos, Contactos básico |
 | 🟢 Media | 8 | Factoring, Reportes, Tipos Pallet |
 
 ---
 
-## 12. Consideraciones de Implementación
+## 13. Consideraciones de Implementación
 
-### 12.1 Seguridad
-- Todas las rutas (excepto login) requieren autenticación
-- Validar JWT en middleware
+### 13.1 Seguridad
+- Todas las rutas (excepto login) requieren autenticación mediante Auth.js
+- **Autenticación**: Auth.js (NextAuth.js v5) con Credentials Provider
+- **Sesiones**: Cookies HTTP-only (seguras, no accesibles desde JavaScript)
+- **Hash de Contraseñas**: 
+  - Usar `bcrypt` con Node.js `crypto`
+  - Salt rounds: 10
+  - Generar hash: `bcrypt.hash(password, 10)`
+  - Verificar: `bcrypt.compare(password, storedHash)`
+  - Nunca almacenar contraseñas en texto plano
+- Validar sesión en middleware de Auth.js
 - Sanitizar inputs para prevenir SQL injection
 - Validar tipos de archivo en uploads
 - Rate limiting en endpoints sensibles
 
-### 12.2 Performance
+### 13.2 Performance
 - Paginación obligatoria en listas
 - Índices en campos de búsqueda
 - Caché de catálogos (tipos pallet)
 - Lazy loading de relaciones
 
-### 12.3 Archivos
+### 13.3 Archivos
 - Almacenar en `/uploads/docs/`
 - Nombrar con UUID + extensión
 - Validar MIME type en servidor
 - Límite 10MB por archivo
 
-### 12.4 Transacciones
+### 13.4 Transacciones
 - Usar transacciones para operaciones multi-tabla
 - Rollback en caso de error
 - Logs de auditoría
+
+### 13.5 Generación de PDF
+- Usar librería PDF (ej: `pdfkit`, `puppeteer`, `react-pdf`)
+- Template profesional con logo de FSL
+- Incluir todos los datos: proveedor, productos, totales
+- Guardar PDF en `/uploads/ocs/` con nombre `oc-YYYY-NNNNN.pdf`
+- Retornar URL para descarga inmediata
 
 ---
 
