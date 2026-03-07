@@ -1,11 +1,23 @@
 # Schema de Base de Datos - Forestal Santa Lucía
 
-**Versión:** 1.4  
-**Fecha:** 2026-01-15  
+**Versión:** 1.6  
+**Fecha:** 2026-01-27  
 **Base de datos:** PostgreSQL 14+  
 **ORM objetivo:** Prisma  
-**Basado en:** SDD v2.5, API-SPEC v1.4, UI-SPEC v1.4  
+**Basado en:** SDD v3.3, API-SPEC v1.4, UI-SPEC v1.4  
 **Autenticación:** Auth.js (NextAuth.js v5) con bcrypt (salt rounds: 10)  
+
+**Cambios v1.6:**
+- ✅ Agregada tabla `empresa` para representar organizaciones (proveedores, clientes, transportistas, etc.)
+- ✅ Agregada tabla `evento` para representar eventos logísticos u operativos
+- ✅ Agregada tabla `entrega` con relación a `evento` (1:N) y `empresa` (N:1)
+- ✅ Las entregas ocurren dentro de eventos (`evento_id` obligatorio)
+- ✅ Las entregas referencian empresas mediante `empresa_id` y opcionalmente `empresa_receptora_id`
+
+**Cambios v1.5:**
+- ✅ Una operación puede tener 1 o más proveedores (relación N:M)
+- ✅ Tabla intermedia `operacion_proveedor` para relación muchos a muchos
+- ✅ Eliminado campo `proveedor_id` de `operacion`  
 
 ---
 
@@ -13,21 +25,61 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              MODELO DE DATOS v1.4                                    │
+│                              MODELO DE DATOS v1.6                                    │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                     │
 │   ┌──────────────┐                                    ┌──────────────┐              │
 │   │   Usuario    │                                    │  TipoPallet  │              │
 │   └──────────────┘                                    └──────┬───────┘              │
 │                                                              │                      │
-│   ┌──────────────┐         ┌──────────────┐         ┌───────┴────────┐             │
-│   │  Proveedor   │────┐    │   Operacion  │    ┌────│ OperacionLinea │             │
-│   └──────────────┘    │    ├──────────────┤    │    └────────────────┘             │
-│                       └───►│ proveedor_id │◄───┘                                   │
-│   ┌──────────────┐    ┌───►│ cliente_id   │                                        │
-│   │   Cliente    │────┘    └──────┬───────┘                                        │
-│   └──────────────┘                │                                                │
-│                                   │                                                │
+│   ┌──────────────┐         ┌──────────────────┐      ┌───────┴────────┐             │
+│   │  Proveedor   │────┐    │  OperacionProveedor │    │ OperacionLinea │             │
+│   │ (empresa_id) │    │    │  (tabla intermedia) │    └────────────────┘             │
+│   └──────────────┘    │    │  - operacion_id    │◄───┘                               │
+│                       └───►│  - proveedor_id    │                                    │
+│   ┌──────────────┐    ┌───►└──────────────────┘                                    │
+│   │   Cliente    │────┘                │                                            │
+│   │ (empresa_id) │                     │                                            │
+│   └──────────────┘                     │                                            │
+│                                        │                                            │
+│                          ┌─────────────┴────────┐                                   │
+│                          │   Operacion          │                                   │
+│                          ├──────────────────────┤                                   │
+│                          │ - cliente_id         │                                   │
+│                          └──────────┬───────────┘                                   │
+│                                     │                                                │
+│                                     │ (N:1)                                          │
+│                                     ▼                                                │
+│                          ┌──────────────────────┐                                  │
+│                          │      Evento           │                                  │
+│                          ├──────────────────────┤                                  │
+│                          │ - tipo                │                                  │
+│                          │ - fecha_inicio        │                                  │
+│                          │ - estado              │                                  │
+│                          └──────────┬────────────┘                                  │
+│                                     │                                                │
+│                                     │ (1:N)                                          │
+│                                     ▼                                                │
+│                          ┌──────────────────────┐                                  │
+│                          │     Entrega           │                                  │
+│                          ├──────────────────────┤                                  │
+│                          │ - empresa_id         │                                  │
+│                          │ - empresa_receptora_id│                                  │
+│                          │ - cantidad           │                                  │
+│                          │ - tipo_entrega        │                                  │
+│                          └──────────┬────────────┘                                  │
+│                                     │                                                │
+│                                     │ (N:1)                                          │
+│                                     ▼                                                │
+│                          ┌──────────────────────┐                                  │
+│                          │     Empresa          │                                  │
+│                          ├──────────────────────┤                                  │
+│                          │ - nombre             │                                  │
+│                          │ - rut                │                                  │
+│                          │ - tipo_empresa       │                                  │
+│                          │ - estado             │                                  │
+│                          └──────────────────────┘                                  │
+│                                                                                     │
 │              ┌────────────────────┼────────────────────┐                           │
 │              │                    │                    │                           │
 │              ▼                    ▼                    ▼                           │
@@ -37,6 +89,7 @@
 │                                                                                     │
 │   ┌──────────────┐                                                                 │
 │   │  Proveedor   │                                                                 │
+│   │ (empresa_id) │                                                                 │
 │   └──────┬───────┘                                                                 │
 │          │ (N:1)                                                                   │
 │          │                                                                         │
@@ -58,17 +111,24 @@
 └─────────────────────────────────────────────────────────────────────────────────────┘
 
 RELACIONES:
-  Proveedor    1 ──────── N  Operacion (como proveedor)
+  Proveedor    N ──────── M  Operacion (a través de OperacionProveedor)
   Cliente      1 ──────── N  Operacion (como cliente)
+  Operacion    1 ──────── N  OperacionProveedor (tabla intermedia)
   Operacion    1 ──────── N  OperacionLinea
   Operacion    1 ──────── N  Documento
   Operacion    1 ──────── N  Pago
   Operacion    1 ──────── 1  Factoring (opcional)
   Operacion    1 ──────── N  OrdenCompra (opcional, asociación)
+  Operacion    N ──────── 1  Evento (opcional, asociación)
+  Evento       1 ──────── N  Entrega (las entregas ocurren dentro de eventos)
+  Entrega      N ──────── 1  Empresa (empresa que realiza la entrega)
+  Entrega      N ──────── 1  Empresa (empresa que recibe, opcional)
   TipoPallet   1 ──────── N  OperacionLinea
   Proveedor    1 ──────── N  OrdenCompra
   OrdenCompra  1 ──────── N  OrdenCompraLinea
   TipoPallet   1 ──────── N  OrdenCompraLinea
+  Proveedor    N ──────── 1  Empresa (opcional, referencia a empresa)
+  Cliente      N ──────── 1  Empresa (opcional, referencia a empresa)
 ```
 
 ---
@@ -81,9 +141,15 @@ RELACIONES:
 CREATE TYPE tipo_operacion AS ENUM ('COMPRA', 'VENTA_DIRECTA', 'VENTA_COMISION');
 CREATE TYPE estado_documental AS ENUM ('INCOMPLETA', 'COMPLETA');
 CREATE TYPE estado_financiero AS ENUM ('PENDIENTE', 'FACTURADA', 'PAGADA', 'CERRADA');
-CREATE TYPE tipo_documento AS ENUM ('ORDEN_COMPRA', 'GUIA_DESPACHO', 'GUIA_RECEPCION', 'FACTURA', 'CERTIFICADO_NIMF15', 'OTRO');
+CREATE TYPE tipo_documento AS ENUM ('ORDEN_COMPRA', 'ORDEN_COMPRA_CLIENTE', 'GUIA_DESPACHO', 'GUIA_RECEPCION', 'FACTURA', 'CERTIFICADO_NIMF15', 'OTRO');
 CREATE TYPE tipo_pago AS ENUM ('PAGO_PROVEEDOR', 'COBRO_CLIENTE', 'PAGO_FLETE', 'PAGO_COMISION');
 CREATE TYPE estado_oc AS ENUM ('BORRADOR', 'ENVIADA', 'RECIBIDA', 'CANCELADA');
+CREATE TYPE tipo_empresa AS ENUM ('PROVEEDOR', 'CLIENTE', 'TRANSPORTISTA', 'OTRO');
+CREATE TYPE estado_empresa AS ENUM ('ACTIVA', 'INACTIVA');
+CREATE TYPE tipo_evento AS ENUM ('ENTREGA', 'RECEPCION', 'TRASLADO', 'OTRO');
+CREATE TYPE estado_evento AS ENUM ('PLANIFICADO', 'EN_CURSO', 'COMPLETADO', 'CANCELADO');
+CREATE TYPE tipo_entrega AS ENUM ('COMPLETA', 'PARCIAL', 'DEVOLUCION', 'OTRO');
+CREATE TYPE estado_entrega AS ENUM ('PENDIENTE', 'EN_TRANSITO', 'COMPLETADA', 'RECHAZADA');
 ```
 
 ### TipoOperacion
@@ -131,6 +197,52 @@ BORRADOR     -- OC en creación, no enviada
 ENVIADA      -- OC generada y enviada al proveedor
 RECIBIDA     -- Proveedor confirmó recepción
 CANCELADA    -- OC cancelada
+```
+
+### TipoEmpresa
+```
+PROVEEDOR      -- Empresa que provee productos
+CLIENTE        -- Empresa que compra productos
+TRANSPORTISTA  -- Empresa de transporte/logística
+OTRO           -- Otro tipo de empresa
+```
+
+### EstadoEmpresa
+```
+ACTIVA      -- Empresa activa y disponible
+INACTIVA    -- Empresa inactiva (no disponible)
+```
+
+### TipoEvento
+```
+ENTREGA     -- Evento de entrega de productos
+RECEPCION   -- Evento de recepción de productos
+TRASLADO    -- Evento de traslado/transporte
+OTRO        -- Otro tipo de evento
+```
+
+### EstadoEvento
+```
+PLANIFICADO   -- Evento planificado, no iniciado
+EN_CURSO      -- Evento en ejecución
+COMPLETADO    -- Evento finalizado exitosamente
+CANCELADO     -- Evento cancelado
+```
+
+### TipoEntrega
+```
+COMPLETA     -- Entrega completa según lo solicitado
+PARCIAL      -- Entrega parcial
+DEVOLUCION   -- Devolución de productos
+OTRO         -- Otro tipo de entrega
+```
+
+### EstadoEntrega
+```
+PENDIENTE     -- Entrega pendiente de realizar
+EN_TRANSITO   -- Entrega en tránsito
+COMPLETADA    -- Entrega completada exitosamente
+RECHAZADA     -- Entrega rechazada
 ```
 
 ---
@@ -207,7 +319,151 @@ CANCELADA    -- OC cancelada
 
 ---
 
-### 3.4 TipoPallet
+### 3.4 Empresa
+
+Tabla que representa organizaciones que interactúan con el sistema (proveedores, clientes, transportistas, etc.). Permite reutilización y unificación de información de empresas.
+
+| Campo | Tipo | Nullable | Default | Descripción |
+|-------|------|----------|---------|-------------|
+| `id` | UUID | NO | uuid_generate_v4() | PK |
+| `nombre` | VARCHAR(255) | NO | - | Nombre de la empresa |
+| `rut` | VARCHAR(12) | NO | - | RUT o identificador legal, almacenado sin puntos (ej: 77442030-4) |
+| `tipo_empresa` | ENUM TipoEmpresa | NO | - | Tipo de empresa |
+| `contacto` | VARCHAR(255) | YES | NULL | Información de contacto principal |
+| `direccion` | VARCHAR(500) | YES | NULL | Dirección física |
+| `telefono` | VARCHAR(20) | YES | NULL | Teléfono de contacto |
+| `email` | VARCHAR(255) | YES | NULL | Email de contacto |
+| `estado` | ENUM EstadoEmpresa | NO | 'ACTIVA' | Estado de la empresa |
+| `created_at` | TIMESTAMP | NO | NOW() | Fecha creación |
+| `updated_at` | TIMESTAMP | NO | NOW() | Última modificación |
+
+**Índices:**
+- `empresa_rut_unique` UNIQUE (rut)
+- `empresa_tipo_idx` (tipo_empresa)
+- `empresa_estado_idx` (estado)
+- `empresa_nombre_idx` (nombre) -- Para búsquedas por nombre
+
+**Foreign Keys:**
+- Ninguna (tabla independiente)
+
+**Constraints de Check:**
+```sql
+-- Validar formato de RUT (básico, validación completa en aplicación)
+ALTER TABLE empresa ADD CONSTRAINT chk_rut_formato 
+  CHECK (rut ~ '^[0-9]{7,8}-[0-9Kk]$');
+```
+
+**Notas:**
+- La entidad `Empresa` unifica la representación de organizaciones
+- Las entidades `Proveedor` y `Cliente` pueden referenciar a `Empresa` mediante `empresa_id` (opcional, para mantener compatibilidad)
+- El RUT se almacena sin puntos, solo con guión antes del dígito verificador
+
+---
+
+### 3.5 Evento
+
+Tabla que representa eventos logísticos u operativos dentro del sistema. Los eventos pueden contener múltiples entregas.
+
+| Campo | Tipo | Nullable | Default | Descripción |
+|-------|------|----------|---------|-------------|
+| `id` | UUID | NO | uuid_generate_v4() | PK |
+| `numero` | VARCHAR(50) | NO | - | Número identificador del evento |
+| `tipo` | ENUM TipoEvento | NO | - | Tipo de evento |
+| `fecha_inicio` | DATE | NO | - | Fecha de inicio del evento |
+| `fecha_fin` | DATE | YES | NULL | Fecha de finalización del evento |
+| `ubicacion` | VARCHAR(500) | YES | NULL | Ubicación donde ocurre el evento |
+| `descripcion` | TEXT | YES | NULL | Descripción del evento |
+| `estado` | ENUM EstadoEvento | NO | 'PLANIFICADO' | Estado del evento |
+| `operacion_id` | UUID | YES | NULL | FK → Operacion (si está asociado) |
+| `created_at` | TIMESTAMP | NO | NOW() | Fecha creación |
+| `updated_at` | TIMESTAMP | NO | NOW() | Última modificación |
+
+**Índices:**
+- `evento_numero_idx` (numero)
+- `evento_tipo_idx` (tipo)
+- `evento_fecha_inicio_idx` (fecha_inicio DESC)
+- `evento_estado_idx` (estado)
+- `evento_operacion_idx` (operacion_id) WHERE operacion_id IS NOT NULL
+
+**Foreign Keys:**
+- `operacion_id` → `operacion(id)` ON DELETE SET NULL
+
+**Constraints de Check:**
+```sql
+-- Validar que fecha_fin no sea anterior a fecha_inicio
+ALTER TABLE evento ADD CONSTRAINT chk_fecha_fin_valida 
+  CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio);
+
+-- Validar que fecha_inicio no sea futura (opcional, puede ser planificado)
+-- ALTER TABLE evento ADD CONSTRAINT chk_fecha_inicio_no_futura 
+--   CHECK (fecha_inicio <= CURRENT_DATE + INTERVAL '30 days');
+```
+
+**Notas:**
+- Los eventos permiten agrupar entregas relacionadas
+- Un evento puede estar asociado a una operación (opcional)
+- El estado del evento puede cambiar durante su ciclo de vida
+
+---
+
+### 3.6 Entrega
+
+Tabla que representa el acto de entrega de productos o recursos dentro del sistema. Las entregas ocurren dentro de eventos.
+
+| Campo | Tipo | Nullable | Default | Descripción |
+|-------|------|----------|---------|-------------|
+| `id` | UUID | NO | uuid_generate_v4() | PK |
+| `evento_id` | UUID | NO | - | FK → Evento (obligatorio) |
+| `empresa_id` | UUID | NO | - | FK → Empresa (empresa que realiza la entrega) |
+| `empresa_receptora_id` | UUID | YES | NULL | FK → Empresa (empresa que recibe, si aplica) |
+| `fecha_hora` | TIMESTAMP | NO | - | Fecha y hora de la entrega |
+| `tipo_entrega` | ENUM TipoEntrega | NO | - | Tipo de entrega |
+| `descripcion` | TEXT | YES | NULL | Descripción de la entrega |
+| `cantidad` | DECIMAL(12,2) | NO | - | Cantidad entregada |
+| `unidad` | VARCHAR(20) | NO | 'unidades' | Unidad de medida (ej: "unidades", "pallets", "kg") |
+| `estado` | ENUM EstadoEntrega | NO | 'PENDIENTE' | Estado de la entrega |
+| `observaciones` | TEXT | YES | NULL | Notas adicionales sobre la entrega |
+| `created_at` | TIMESTAMP | NO | NOW() | Fecha creación |
+| `updated_at` | TIMESTAMP | NO | NOW() | Última modificación |
+
+**Índices:**
+- `entrega_evento_idx` (evento_id)
+- `entrega_empresa_idx` (empresa_id)
+- `entrega_empresa_receptora_idx` (empresa_receptora_id) WHERE empresa_receptora_id IS NOT NULL
+- `entrega_fecha_hora_idx` (fecha_hora DESC)
+- `entrega_tipo_idx` (tipo_entrega)
+- `entrega_estado_idx` (estado)
+
+**Foreign Keys:**
+- `evento_id` → `evento(id)` ON DELETE CASCADE
+- `empresa_id` → `empresa(id)` ON DELETE RESTRICT
+- `empresa_receptora_id` → `empresa(id)` ON DELETE SET NULL
+
+**Constraints de Check:**
+```sql
+-- Validar cantidad positiva
+ALTER TABLE entrega ADD CONSTRAINT chk_cantidad_positiva 
+  CHECK (cantidad > 0);
+
+-- Validar que fecha_hora no sea futura (opcional, puede ser planificada)
+-- ALTER TABLE entrega ADD CONSTRAINT chk_fecha_hora_no_futura 
+--   CHECK (fecha_hora <= CURRENT_TIMESTAMP + INTERVAL '7 days');
+
+-- Validar unidad no vacía
+ALTER TABLE entrega ADD CONSTRAINT chk_unidad_no_vacia 
+  CHECK (LENGTH(TRIM(unidad)) > 0);
+```
+
+**Notas:**
+- Cada entrega debe estar asociada a un evento (`evento_id` obligatorio)
+- La relación `Evento 1 ── N Entregas` permite agrupar múltiples entregas en el mismo contexto operativo
+- `empresa_id` es obligatorio (quién realiza la entrega)
+- `empresa_receptora_id` es opcional (quién recibe, si aplica)
+- La cantidad puede ser decimal para permitir fracciones si es necesario
+
+---
+
+### 3.7 TipoPallet
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -232,7 +488,7 @@ INSERT INTO tipo_pallet (codigo, nombre, descripcion, requiere_certificacion) VA
 
 ---
 
-### 3.5 Operacion
+### 3.8 Operacion
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -240,7 +496,6 @@ INSERT INTO tipo_pallet (codigo, nombre, descripcion, requiere_certificacion) VA
 | `numero` | VARCHAR(20) | NO | - | Correlativo (OP-2026-00001) |
 | `tipo` | ENUM TipoOperacion | NO | - | Tipo de operación |
 | `fecha` | DATE | NO | - | Fecha de la operación |
-| `proveedor_id` | UUID | YES | NULL | FK → Proveedor |
 | `cliente_id` | UUID | YES | NULL | FK → Cliente |
 | `estado_documental` | ENUM EstadoDocumental | NO | 'INCOMPLETA' | Estado de documentos |
 | `estado_financiero` | ENUM EstadoFinanciero | NO | 'PENDIENTE' | Estado financiero |
@@ -252,22 +507,23 @@ INSERT INTO tipo_pallet (codigo, nombre, descripcion, requiere_certificacion) VA
 | `fecha_cierre` | TIMESTAMP | YES | NULL | Cuándo se cerró |
 | `created_at` | TIMESTAMP | NO | NOW() | Fecha creación |
 | `updated_at` | TIMESTAMP | NO | NOW() | Última modificación |
+| `evento_id` | UUID | YES | NULL | FK → Evento (evento asociado, opcional) |
 
 **Índices:**
 - `operacion_numero_unique` UNIQUE (numero)
 - `operacion_tipo_idx` (tipo)
 - `operacion_fecha_idx` (fecha DESC)
-- `operacion_proveedor_idx` (proveedor_id) WHERE proveedor_id IS NOT NULL
 - `operacion_cliente_idx` (cliente_id) WHERE cliente_id IS NOT NULL
 - `operacion_estado_doc_idx` (estado_documental)
 - `operacion_estado_fin_idx` (estado_financiero)
 - `operacion_oc_generada_idx` (orden_compra_generada_id) WHERE orden_compra_generada_id IS NOT NULL
 - `operacion_created_idx` (created_at DESC) -- Para ordenar por más recientes
+- `operacion_evento_idx` (evento_id) WHERE evento_id IS NOT NULL
 
 **Foreign Keys:**
-- `proveedor_id` → `proveedor(id)` ON DELETE RESTRICT
 - `cliente_id` → `cliente(id)` ON DELETE RESTRICT
 - `orden_compra_generada_id` → `orden_compra(id)` ON DELETE SET NULL
+- `evento_id` → `evento(id)` ON DELETE SET NULL
 
 **Constraints de Check:**
 ```sql
@@ -282,17 +538,45 @@ ALTER TABLE operacion ADD CONSTRAINT chk_fecha_cierre_valida
 
 **Validaciones de negocio (a nivel de aplicación):**
 ```
-- Si tipo = COMPRA → proveedor_id es requerido
-- Si tipo = VENTA_DIRECTA → cliente_id Y proveedor_id son requeridos (operación unificada)
-- Si tipo = VENTA_COMISION → proveedor_id Y cliente_id son requeridos (operación unificada)
+- Si tipo = COMPRA → debe tener al menos 1 proveedor (a través de operacion_proveedor)
+- Si tipo = VENTA_DIRECTA → cliente_id es requerido Y debe tener al menos 1 proveedor
+- Si tipo = VENTA_COMISION → cliente_id es requerido Y debe tener al menos 1 proveedor
 - Si tipo = VENTA_* → las líneas deben tener precio_venta_unitario Y precio_compra_unitario
 - Si estado_financiero = CERRADA → observacion_cierre es requerido
 - orden_compra_cliente: Opcional pero recomendado para trazabilidad en operaciones de venta
+- Una operación puede tener múltiples proveedores (relación N:M)
 ```
 
 ---
 
-### 3.6 OperacionLinea
+### 3.8.1 OperacionProveedor (Tabla Intermedia)
+
+Tabla de unión para relación muchos a muchos entre Operacion y Proveedor.
+
+| Campo | Tipo | Nullable | Default | Descripción |
+|-------|------|----------|---------|-------------|
+| `id` | UUID | NO | uuid_generate_v4() | PK |
+| `operacion_id` | UUID | NO | - | FK → Operacion |
+| `proveedor_id` | UUID | NO | - | FK → Proveedor |
+| `created_at` | TIMESTAMP | NO | NOW() | Fecha creación |
+
+**Índices:**
+- `operacion_proveedor_operacion_idx` (operacion_id)
+- `operacion_proveedor_proveedor_idx` (proveedor_id)
+- `operacion_proveedor_unique` UNIQUE (operacion_id, proveedor_id) -- Evitar duplicados
+
+**Foreign Keys:**
+- `operacion_id` → `operacion(id)` ON DELETE CASCADE
+- `proveedor_id` → `proveedor(id)` ON DELETE RESTRICT
+
+**Constraints de Check:**
+```sql
+-- No se permiten duplicados (ya cubierto por índice único)
+```
+
+---
+
+### 3.9 OperacionLinea
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -347,7 +631,7 @@ ALTER TABLE operacion_linea ADD CONSTRAINT chk_margen_no_negativo
 
 ---
 
-### 3.7 Documento
+### 3.10 Documento
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -400,7 +684,7 @@ ALTER TABLE documento ADD CONSTRAINT chk_archivo_tipo
 
 ---
 
-### 3.8 Pago
+### 3.11 Pago
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -443,7 +727,7 @@ ALTER TABLE pago ADD CONSTRAINT chk_fecha_pago_no_futura
 
 ---
 
-### 3.9 Factoring
+### 3.12 Factoring
 
 | Campo | Tipo | Nullable | Default | Descripción |
 |-------|------|----------|---------|-------------|
@@ -486,7 +770,7 @@ ALTER TABLE factoring ADD CONSTRAINT chk_adelanto_no_excede_factura
 
 ---
 
-### 3.10 OrdenCompra
+### 3.13 OrdenCompra
 
 Tabla para almacenar las órdenes de compra generadas por FSL dirigidas a proveedores.
 
@@ -528,7 +812,7 @@ CANCELADA    -- OC cancelada
 
 ---
 
-### 3.11 OrdenCompraLinea
+### 3.14 OrdenCompraLinea
 
 Líneas de productos de una orden de compra.
 
@@ -824,6 +1108,18 @@ CREATE TRIGGER update_cliente_updated_at
 CREATE TRIGGER update_orden_compra_updated_at 
     BEFORE UPDATE ON orden_compra 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_empresa_updated_at 
+    BEFORE UPDATE ON empresa 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_evento_updated_at 
+    BEFORE UPDATE ON evento 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_entrega_updated_at 
+    BEFORE UPDATE ON entrega 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 
 ### Trigger: Actualizar ultimo_acceso en login
@@ -874,6 +1170,46 @@ enum EstadoOC {
   CANCELADA
 }
 
+enum TipoEmpresa {
+  PROVEEDOR
+  CLIENTE
+  TRANSPORTISTA
+  OTRO
+}
+
+enum EstadoEmpresa {
+  ACTIVA
+  INACTIVA
+}
+
+enum TipoEvento {
+  ENTREGA
+  RECEPCION
+  TRASLADO
+  OTRO
+}
+
+enum EstadoEvento {
+  PLANIFICADO
+  EN_CURSO
+  COMPLETADO
+  CANCELADO
+}
+
+enum TipoEntrega {
+  COMPLETA
+  PARCIAL
+  DEVOLUCION
+  OTRO
+}
+
+enum EstadoEntrega {
+  PENDIENTE
+  EN_TRANSITO
+  COMPLETADA
+  RECHAZADA
+}
+
 model Usuario {
   id           String    @id @default(uuid())
   email        String    @unique @db.VarChar(255)
@@ -887,6 +1223,80 @@ model Usuario {
   
   @@index([activo])
   @@map("usuario")
+}
+
+model Empresa {
+  id          String      @id @default(uuid())
+  nombre      String      @db.VarChar(255)
+  rut         String      @unique @db.VarChar(12)
+  tipoEmpresa TipoEmpresa @map("tipo_empresa")
+  contacto    String?     @db.VarChar(255)
+  direccion   String?     @db.VarChar(500)
+  telefono    String?     @db.VarChar(20)
+  email       String?     @db.VarChar(255)
+  estado      EstadoEmpresa @default(ACTIVA)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  entregas            Entrega[] @relation("EmpresaEntrega")
+  entregasReceptoras  Entrega[] @relation("EmpresaReceptora")
+  
+  @@index([tipoEmpresa])
+  @@index([estado])
+  @@index([nombre])
+  @@map("empresa")
+}
+
+model Evento {
+  id          String      @id @default(uuid())
+  numero      String      @db.VarChar(50)
+  tipo        TipoEvento
+  fechaInicio DateTime    @map("fecha_inicio") @db.Date
+  fechaFin    DateTime?   @map("fecha_fin") @db.Date
+  ubicacion   String?     @db.VarChar(500)
+  descripcion String?     @db.Text
+  estado      EstadoEvento @default(PLANIFICADO)
+  operacionId String?     @map("operacion_id") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  operacion   Operacion?  @relation(fields: [operacionId], references: [id], onDelete: SetNull)
+  entregas    Entrega[]
+  
+  @@index([numero])
+  @@index([tipo])
+  @@index([fechaInicio(sort: Desc)])
+  @@index([estado])
+  @@index([operacionId])
+  @@map("evento")
+}
+
+model Entrega {
+  id                String        @id @default(uuid())
+  eventoId          String        @map("evento_id") @db.Uuid
+  empresaId         String        @map("empresa_id") @db.Uuid
+  empresaReceptoraId String?      @map("empresa_receptora_id") @db.Uuid
+  fechaHora         DateTime      @map("fecha_hora") @db.Timestamp
+  tipoEntrega       TipoEntrega   @map("tipo_entrega")
+  descripcion       String?       @db.Text
+  cantidad          Decimal       @db.Decimal(12, 2)
+  unidad            String        @default("unidades") @db.VarChar(20)
+  estado            EstadoEntrega @default(PENDIENTE)
+  observaciones     String?       @db.Text
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  
+  evento            Evento        @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  empresa           Empresa       @relation("EmpresaEntrega", fields: [empresaId], references: [id], onDelete: Restrict)
+  empresaReceptora  Empresa?      @relation("EmpresaReceptora", fields: [empresaReceptoraId], references: [id], onDelete: SetNull)
+  
+  @@index([eventoId])
+  @@index([empresaId])
+  @@index([empresaReceptoraId])
+  @@index([fechaHora(sort: Desc)])
+  @@index([tipoEntrega])
+  @@index([estado])
+  @@map("entrega")
 }
 
 model Operacion {
@@ -904,12 +1314,14 @@ model Operacion {
   observaciones         String?  @db.Text
   observacionCierre     String?  @map("observacion_cierre") @db.Text
   fechaCierre           DateTime? @map("fecha_cierre") @db.Timestamp
+  eventoId              String?  @map("evento_id") @db.Uuid
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   
   proveedor             Proveedor? @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   cliente               Cliente? @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   ordenCompraGenerada   OrdenCompra? @relation(fields: [ordenCompraGeneradaId], references: [id], onDelete: SetNull)
+  evento                Evento? @relation(fields: [eventoId], references: [id], onDelete: SetNull)
   lineas                OperacionLinea[]
   documentos            Documento[]
   pagos                 Pago[]
@@ -922,6 +1334,7 @@ model Operacion {
   @@index([estadoDocumental])
   @@index([estadoFinanciero])
   @@index([ordenCompraGeneradaId])
+  @@index([eventoId])
   @@index([createdAt(sort: Desc)])
   @@map("operacion")
 }
@@ -976,9 +1389,10 @@ model OrdenCompra {
 ```
 
 ### Migraciones
-- **Orden de creación**: Usuario → TipoPallet → Proveedor/Cliente → Operacion → OperacionLinea → OrdenCompra → OrdenCompraLinea → Documento → Pago → Factoring
+- **Orden de creación**: Usuario → TipoPallet → Empresa → Proveedor/Cliente → Evento → Entrega → Operacion → OperacionProveedor → OperacionLinea → OrdenCompra → OrdenCompraLinea → Documento → Pago → Factoring
 - **Seed data**: Incluir en migración inicial o script separado
 - **Constraints**: Agregar después de crear tablas
+- **Nota**: `Empresa` debe crearse antes de `Entrega` ya que `Entrega` tiene FK a `Empresa`
 
 ### Performance
 - **Índices**: Los definidos cubren búsquedas más comunes
@@ -1026,6 +1440,13 @@ COMMENT ON COLUMN operacion.orden_compra_generada_id IS 'Referencia a la OC gene
 COMMENT ON COLUMN operacion_linea.precio_venta_unitario IS 'Precio al cliente (solo para VENTA_*)';
 COMMENT ON COLUMN operacion_linea.precio_compra_unitario IS 'Costo al proveedor (solo para VENTA_*)';
 COMMENT ON COLUMN usuario.password_hash IS 'Hash bcrypt con salt rounds 10, formato $2b$10$...';
+COMMENT ON TABLE empresa IS 'Organizaciones que interactúan con el sistema (proveedores, clientes, transportistas, etc.)';
+COMMENT ON TABLE evento IS 'Eventos logísticos u operativos que agrupan entregas relacionadas';
+COMMENT ON TABLE entrega IS 'Entregas de productos o recursos que ocurren dentro de eventos';
+COMMENT ON COLUMN entrega.evento_id IS 'Evento al que pertenece la entrega (obligatorio)';
+COMMENT ON COLUMN entrega.empresa_id IS 'Empresa que realiza la entrega (obligatorio)';
+COMMENT ON COLUMN entrega.empresa_receptora_id IS 'Empresa que recibe la entrega (opcional)';
+COMMENT ON COLUMN operacion.evento_id IS 'Evento asociado a la operación (opcional)';
 ```
 
 ---

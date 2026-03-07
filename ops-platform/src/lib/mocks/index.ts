@@ -11,7 +11,7 @@ export const mockOperaciones = [
     tipo: 'VENTA_DIRECTA',
     fecha: '2026-01-12',
     cliente: { id: '1', razonSocial: 'Cermaq Chile S.A.', rut: '76123456-7' },
-    proveedor: { id: '1', razonSocial: 'Forestal Andes Ltda.', rut: '77442030-4' },
+    proveedores: [{ proveedor: { id: '1', razonSocial: 'Forestal Andes Ltda.', rut: '77442030-4' } }],
     direccionEntrega: 'Puerto Montt, Av. Principal 123',
     ordenCompraCliente: 'OC-36',
     ordenCompraGenerada: { id: '1', numero: 'OC-2026-00015' },
@@ -40,7 +40,7 @@ export const mockOperaciones = [
     numero: 'OP-2026-00129',
     tipo: 'COMPRA',
     fecha: '2026-01-11',
-    proveedor: { id: '1', razonSocial: 'Forestal Andes Ltda.', rut: '77442030-4' },
+    proveedores: [{ proveedor: { id: '1', razonSocial: 'Forestal Andes Ltda.', rut: '77442030-4' } }],
     estadoDocumental: 'COMPLETA',
     estadoFinanciero: 'PAGADA',
     productos: [

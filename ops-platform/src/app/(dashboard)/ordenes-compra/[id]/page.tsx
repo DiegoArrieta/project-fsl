@@ -10,12 +10,14 @@ import { ArrowLeft, Edit, Trash2, Download, CheckCircle2, XCircle } from 'lucide
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
+import { toast } from 'sonner'
 
 export default function OrdenCompraDetallePage() {
   const params = useParams()
   const id = params.id as string
   const [oc, setOc] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
     const orden = mockOrdenesCompra.find((o) => o.id === id)
@@ -24,6 +26,37 @@ export default function OrdenCompraDetallePage() {
       setLoading(false)
     }
   }, [id])
+
+  const handleDescargarPDF = async () => {
+    try {
+      setIsDownloading(true)
+      toast.loading('Generando PDF...', { id: 'download-pdf' })
+
+      const response = await fetch(`/api/ordenes-compra/${id}/descargar-pdf`)
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Error al descargar PDF')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${oc.numero}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('PDF descargado correctamente', { id: 'download-pdf' })
+    } catch (error: any) {
+      console.error('Error al descargar PDF:', error)
+      toast.error(error.message || 'Error al descargar PDF', { id: 'download-pdf' })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -170,24 +203,31 @@ export default function OrdenCompraDetallePage() {
       )}
 
       {/* PDF */}
-      {oc.pdfGenerado && (
-        <Card>
-          <CardHeader>
-            <CardTitle>PDF Generado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">PDF generado el {format(new Date(oc.fecha), 'dd/MM/yyyy')}</p>
-              </div>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Descargar PDF
-              </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Descargar Orden de Compra</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {oc.pdfGenerado 
+                  ? `PDF generado el ${format(new Date(oc.fecha), 'dd/MM/yyyy')}`
+                  : 'Descarga el PDF de esta orden de compra'
+                }
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <Button 
+              variant="outline" 
+              onClick={handleDescargarPDF}
+              disabled={isDownloading}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {isDownloading ? 'Generando...' : 'Descargar PDF'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Acciones */}
       <Card>

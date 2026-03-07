@@ -1,9 +1,20 @@
 # SDD - Spec Driven Development Document
 ## Sistema de Gestión Operativa - Forestal Santa Lucía SpA
 
-**Versión:** 2.5  
-**Fecha:** 2026-01-15  
-**Estado:** Especificación validada con cliente  
+**Versión:** 3.3  
+**Fecha:** 2026-01-27  
+**Estado:** MVP 95% Completo - Dashboard y Alertas Implementadas  
+
+**Cambios v3.3:**
+- ✅ Agregada entidad `Empresa` para representar organizaciones (proveedores, clientes, transportistas, etc.)
+- ✅ Agregada entidad `Evento` para representar eventos logísticos u operativos
+- ✅ Agregada entidad `Entrega` con relación a `Evento` y `Empresa`
+- ✅ Actualizado modelo de dominio y diagramas de relaciones
+
+**Cambios v3.2:**
+- ✅ Una operación puede tener 1 o más proveedores (relación N:M)
+- ✅ Tabla intermedia `operacion_proveedor` para relación muchos a muchos
+- ✅ Eliminado campo `proveedor_id` de `operacion`  
 **Autor:** Arquitectura de Software  
 
 > **Actualización v2.0:** Simplificación radical del modelo. El sistema se centra en **orden, control y certeza operativa** mediante la gestión unificada de operaciones comerciales y control documental. Usuario único, interfaz simple, foco en pendientes y alertas.  
@@ -188,7 +199,7 @@ Entidad central unificada que representa una transacción comercial completa, in
 | numero | String | Sí | Número correlativo (OP-AAAA-NNNNN) |
 | tipo | Enum | Sí | COMPRA, VENTA_DIRECTA, VENTA_COMISION |
 | fecha | Date | Sí | Fecha de la operación |
-| proveedor_id | UUID | Condicional | Requerido si tipo=COMPRA o VENTA_COMISION. También requerido en VENTA_DIRECTA si hay compra asociada |
+| proveedores | Array[UUID] | Condicional | Requerido al menos 1 proveedor si tipo=COMPRA o VENTA_*. Una operación puede tener múltiples proveedores (relación N:M) |
 | cliente_id | UUID | Condicional | Requerido si tipo=VENTA_* |
 | estado_documental | Enum | Sí | INCOMPLETA, COMPLETA |
 | estado_financiero | Enum | Sí | PENDIENTE, FACTURADA, PAGADA, CERRADA |
@@ -340,7 +351,66 @@ Usuario del sistema (single-user en MVP).
 
 > **Nota v2.0:** Se elimina el campo `rol` porque en esta fase hay un solo usuario con acceso total.
 
-### 4.3 Diagrama de Relaciones v2.0 (Modelo Simplificado)
+#### **Empresa**
+Entidad que representa organizaciones que interactúan con el sistema (proveedores, clientes, transportistas, etc.). Permite reutilización y unificación de información de empresas.
+
+| Atributo | Tipo | Requerido | Descripción |
+|----------|------|-----------|-------------|
+| id | UUID | Sí | Identificador único |
+| nombre | String | Sí | Nombre de la empresa |
+| rut | String | Sí | RUT o identificador legal (formato: `12345678-9`) |
+| tipo_empresa | Enum | Sí | PROVEEDOR, CLIENTE, TRANSPORTISTA, OTRO |
+| contacto | String | No | Información de contacto principal |
+| direccion | String | No | Dirección física |
+| telefono | String | No | Teléfono de contacto |
+| email | String | No | Email de contacto |
+| estado | Enum | Sí | ACTIVA, INACTIVA |
+| created_at | Timestamp | Sí | Fecha de creación |
+| updated_at | Timestamp | Sí | Última modificación |
+
+> **Nota v3.3:** La entidad `Empresa` unifica la representación de organizaciones. Las entidades `Proveedor` y `Cliente` pueden referenciar a `Empresa` mediante `empresa_id` para mantener consistencia y evitar duplicación de información.
+
+#### **Evento**
+Entidad que representa eventos logísticos u operativos dentro del sistema. Los eventos pueden contener múltiples entregas.
+
+| Atributo | Tipo | Requerido | Descripción |
+|----------|------|-----------|-------------|
+| id | UUID | Sí | Identificador único |
+| numero | String | Sí | Número identificador del evento |
+| tipo | Enum | Sí | ENTREGA, RECEPCION, TRASLADO, OTRO |
+| fecha_inicio | Date | Sí | Fecha de inicio del evento |
+| fecha_fin | Date | No | Fecha de finalización del evento |
+| ubicacion | String | No | Ubicación donde ocurre el evento |
+| descripcion | Text | No | Descripción del evento |
+| estado | Enum | Sí | PLANIFICADO, EN_CURSO, COMPLETADO, CANCELADO |
+| operacion_id | UUID | No | Operación asociada (si aplica) |
+| created_at | Timestamp | Sí | Fecha de creación |
+| updated_at | Timestamp | Sí | Última modificación |
+
+> **Nota v3.3:** Los eventos permiten agrupar entregas relacionadas y proporcionar contexto operativo para las actividades logísticas.
+
+#### **Entrega**
+Entidad que representa el acto de entrega de productos o recursos dentro del sistema. Las entregas ocurren dentro de eventos.
+
+| Atributo | Tipo | Requerido | Descripción |
+|----------|------|-----------|-------------|
+| id | UUID | Sí | Identificador único |
+| evento_id | UUID | Sí | Evento al que pertenece la entrega |
+| empresa_id | UUID | Sí | Empresa que realiza la entrega |
+| empresa_receptora_id | UUID | No | Empresa que recibe la entrega (si aplica) |
+| fecha_hora | Timestamp | Sí | Fecha y hora de la entrega |
+| tipo_entrega | Enum | Sí | COMPLETA, PARCIAL, DEVOLUCION, OTRO |
+| descripcion | Text | No | Descripción de la entrega |
+| cantidad | Decimal | Sí | Cantidad entregada |
+| unidad | String | Sí | Unidad de medida (ej: "unidades", "pallets", "kg") |
+| estado | Enum | Sí | PENDIENTE, EN_TRANSITO, COMPLETADA, RECHAZADA |
+| observaciones | Text | No | Notas adicionales sobre la entrega |
+| created_at | Timestamp | Sí | Fecha de creación |
+| updated_at | Timestamp | Sí | Última modificación |
+
+> **Nota v3.3:** Cada entrega debe estar asociada a un evento. La relación `Evento 1 ── N Entregas` permite agrupar múltiples entregas que ocurren en el mismo contexto operativo.
+
+### 4.3 Diagrama de Relaciones v3.3 (Modelo Actualizado)
 
 ```
                      ┌─────────────────┐
@@ -348,22 +418,60 @@ Usuario del sistema (single-user en MVP).
                      │ (Verde, Rústico,│
                      │  Certificado)   │
                      └───────┬─────────┘
-                             │
-                             │
+                              │
+                              │
 ┌──────────────┐              │              ┌──────────────┐
 │  Proveedor   │              │              │   Cliente    │
+│  (empresa_id)│              │              │ (empresa_id)│
 └──────┬───────┘              │              └──────┬───────┘
        │                      │                     │
-       │ (N:1)                ▼                     │ (N:1)
+       │                      │                     │
+       │                      ▼                     │
        │          ┌────────────────────────┐        │
-       └─────────►│      Operacion         │◄───────┘
-                  ├────────────────────────┤
-                  │ - tipo (COMPRA/VENTA)  │
-                  │ - estado_documental    │
-                  │ - estado_financiero    │
-                  │ - fecha                │
-                  └────────┬───────────────┘
+       │          │      Operacion         │        │
+       │          ├────────────────────────┤        │
+       │          │ - tipo (COMPRA/VENTA)  │        │
+       │          │ - estado_documental    │        │
+       │          │ - estado_financiero    │        │
+       │          │ - fecha                │        │
+       │          └────────┬───────────────┘        │
+       │                   │                        │
+       │                   │                        │
+       │                   │ (N:1)                  │
+       │                   ▼                        │
+       │          ┌─────────────────┐              │
+       │          │     Evento       │              │
+       │          ├─────────────────┤              │
+       │          │ - tipo           │              │
+       │          │ - fecha_inicio   │              │
+       │          │ - estado         │              │
+       │          └────────┬────────┘              │
+       │                   │                        │
+       │                   │ (1:N)                  │
+       │                   ▼                        │
+       │          ┌─────────────────┐              │
+       │          │    Entrega      │              │
+       │          ├─────────────────┤              │
+       │          │ - empresa_id    │              │
+       │          │ - empresa_receptora_id│        │
+       │          │ - cantidad      │              │
+       │          │ - tipo_entrega  │              │
+       │          └─────────────────┘              │
+       │                   │                        │
+       │                   │ (N:1)                  │
+       │                   ▼                        │
+       └───────────────────┼────────────────────────┘
                            │
+                           ▼
+                  ┌─────────────────┐
+                  │     Empresa      │
+                  ├─────────────────┤
+                  │ - nombre        │
+                  │ - rut           │
+                  │ - tipo_empresa  │
+                  │ - estado        │
+                  └─────────────────┘
+
          ┌─────────────────┼─────────────────┐
          │                 │                 │
          ▼                 ▼                 ▼
@@ -386,6 +494,7 @@ Usuario del sistema (single-user en MVP).
 
        ┌──────────────┐
        │  Proveedor   │
+       │ (empresa_id) │
        └──────┬───────┘
               │ (N:1)
               │
@@ -410,13 +519,17 @@ Usuario del sistema (single-user en MVP).
        └──────────────────────┘
 ```
 
-**Principios del modelo v2.0:**
+**Principios del modelo v3.3:**
 
 1. **Operacion** es la entidad central unificada
 2. Los **Documentos** se asocian a operaciones (no entidades separadas)
 3. Los **Pagos** se rastrean por operación
 4. **Factoring** es un caso especial de financiamiento
-5. No hay entidades separadas para compras/ventas/guías
+5. **Empresa** unifica la representación de organizaciones (proveedores, clientes, transportistas)
+6. **Evento** agrupa actividades logísticas u operativas
+7. **Entrega** representa entregas de productos/recursos dentro de eventos
+8. Relación `Evento 1 ── N Entregas`: Las entregas ocurren dentro de eventos
+9. Relación `Empresa N ── 1 Entrega`: Las entregas referencian empresas mediante `empresa_id`
 
 ### 4.4 Control de Completitud
 
@@ -570,7 +683,7 @@ Cliente emite OC a FSL → Usuario crea operación unificada con:
 
 **Estructura de la operación:**
 - `cliente_id`: Cliente que compra (obligatorio)
-- `proveedor_id`: Proveedor del cual FSL compra (obligatorio)
+- `proveedores`: Array de proveedores de los cuales FSL compra (obligatorio al menos 1, puede tener múltiples)
 - `orden_compra_cliente`: Número de OC que el cliente emitió a FSL
 - `orden_compra_generada_id`: Referencia a la OC generada por FSL al proveedor
 - `OperacionLinea`: Cada línea contiene:
@@ -810,9 +923,10 @@ Proceso para crear y generar una orden de compra en PDF dirigida a un proveedor.
 | RN-02 | La cantidad debe ser mayor a cero | Validar en cada línea |
 | RN-03 | Número de operación es secuencial: OP-2026-00001 en adelante | Sistema genera automático |
 | RN-04 | No se puede eliminar operación con documentos o pagos asociados | Validar referencias |
-| RN-05 | Operación COMPRA requiere proveedor obligatorio | Validar al crear |
-| RN-06 | Operación VENTA_DIRECTA requiere cliente Y proveedor obligatorios | Validar al crear (operación unificada) |
-| RN-07 | Operación VENTA_COMISION requiere proveedor Y cliente obligatorios | Validar al crear (operación unificada) |
+| RN-05 | Operación COMPRA requiere al menos 1 proveedor obligatorio | Validar al crear |
+| RN-06 | Operación VENTA_DIRECTA requiere cliente Y al menos 1 proveedor obligatorios | Validar al crear (operación unificada) |
+| RN-07 | Operación VENTA_COMISION requiere al menos 1 proveedor Y cliente obligatorios | Validar al crear (operación unificada) |
+| RN-05B | Una operación puede tener múltiples proveedores (relación N:M) | Permitir agregar varios proveedores |
 | RN-07B | Operación VENTA_* debe tener precios de venta Y compra en las líneas | Validar que ambas existan |
 | RN-07C | Margen no puede ser negativo (precio venta >= precio compra) | Validar cálculo de margen |
 | RN-07D | OC generada debe asociarse a la operación de venta | Vincular orden_compra_generada_id |
@@ -1395,6 +1509,9 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 | **Orden de Compra (OC)** | Documento que formaliza la solicitud de compra de productos |
 | **OC Generada** | Orden de Compra creada y generada en PDF desde el sistema |
 | **Número Secuencial OC** | Formato OC-YYYY-NNNNN generado automáticamente por el sistema |
+| **Empresa** | Entidad que representa organizaciones que interactúan con el sistema (proveedores, clientes, transportistas, etc.) |
+| **Evento** | Entidad que representa eventos logísticos u operativos dentro del sistema. Los eventos pueden contener múltiples entregas |
+| **Entrega** | Entidad que representa el acto de entrega de productos o recursos. Las entregas ocurren dentro de eventos y referencian empresas |
 
 ---
 
@@ -1536,7 +1653,8 @@ Funcionalidades que podrían agregar valor pero deben validarse:
 | Base de Datos | **PostgreSQL** | Relacional, robusto, gratis (Supabase/Railway) |
 | Autenticación | **Auth.js (NextAuth.js v5)** | Credentials Provider, sesiones con cookies HTTP-only |
 | Hash Contraseñas | **bcrypt** con Node.js `crypto` | Salt rounds: 10, nunca texto plano |
-| Storage (docs) | **Supabase Storage** o S3 | Escalable, económico |
+| Storage (docs) | **Amazon S3** (producción) / **Mocks** (desarrollo) | Escalable, económico, durabilidad 99.999999999% |
+| PDF Generation | **jsPDF** | Generación de PDFs en cliente/servidor |
 | Hosting | **Vercel** (free tier) | Deploy automático, zero config |
 
 **Ventajas para este proyecto:**
@@ -1595,6 +1713,13 @@ Pero si el equipo prefiere **Python**, la opción HTMX es excelente y cumple per
 | **2.3** | **2026-01-15** | **Arquitectura** | **Entregas parciales y mermas:** <br>• Registro de pallets dañados/rechazados <br>• Seguimiento de entregas parciales por operación <br>• Nueva lógica de reposición de pallets dañados |
 | **2.4** | **2026-01-15** | **Arquitectura** | **Generación de Órdenes de Compra:** <br>• Módulo completo de OC con número secuencial (OC-YYYY-NNNNN) <br>• Generación de PDF profesional <br>• Estados de OC (BORRADOR, ENVIADA, RECIBIDA, CANCELADA) <br>• Asociación de OC a operaciones |
 | **2.5** | **2026-01-15** | **Arquitectura** | **Operación Unificada:** <br>• Operaciones de venta incluyen compra asociada en una sola entidad <br>• Precios de venta y compra en las líneas de producto <br>• Cálculo automático de márgenes <br>• Proveedor obligatorio en operaciones de venta <br>• OC generada asociada a la operación |
+| **2.6** | **2026-01-27** | **Desarrollo** | **Fase 3 Implementada - Módulo de Operaciones (Core):** <br>• APIs REST completas para CRUD de operaciones <br>• Validaciones Zod con reglas de negocio complejas <br>• Cálculo automático de márgenes en operaciones unificadas <br>• Generación de número secuencial (OP-YYYY-NNNNN) <br>• Gestión de estados documental y financiero <br>• Detección automática de documentos faltantes <br>• Cierre de operación con observación obligatoria <br>• Soporte completo para productos certificados (NIMF-15) |
+| **2.7** | **2026-01-27** | **Desarrollo** | **Fase 4 Implementada - Módulo de Órdenes de Compra:** <br>• APIs REST completas para CRUD de órdenes de compra <br>• Generación de PDF profesional con jsPDF <br>• Número secuencial (OC-YYYY-NNNNN) por año <br>• Estados de OC (BORRADOR, ENVIADA, RECIBIDA, CANCELADA) <br>• Template PDF con datos empresa, proveedor, productos, totales <br>• Formateo automático de RUT con puntos <br>• Asociación opcional con operaciones <br>• Validación de transiciones de estado <br>• Solo editable/eliminable en BORRADOR |
+| **2.8** | **2026-01-27** | **Arquitectura** | **Decisión de Infraestructura - Storage de Documentos:** <br>• Almacenamiento de documentos: **Amazon S3** para producción <br>• Desarrollo inicial con **mocks** para agilizar desarrollo <br>• APIs diseñadas para ser agnósticas del storage backend <br>• Migración transparente de mocks a S3 sin cambios en frontend <br>• S3 provee: escalabilidad, durabilidad (11 9s), costos predecibles <br>• Validaciones de tipo y tamaño en capa de aplicación <br>• Metadata de documentos en PostgreSQL, archivos en S3 |
+| **2.9** | **2026-01-27** | **Desarrollo** | **Fase 5 Implementada - Módulo de Documentos:** <br>• Capa de abstracción de storage (`IStorageProvider`) <br>• `MockStorageProvider` funcional para desarrollo <br>• `S3StorageProvider` como placeholder documentado <br>• APIs REST completas para gestión de documentos <br>• Upload con validación de tipo (PDF, JPG, PNG) y tamaño (10MB max) <br>• Detección automática de documentos faltantes <br>• Actualización automática de `estado_documental` <br>• Soporte para certificación NIMF-15 <br>• Enum `TipoDocumento` incluye `ORDEN_COMPRA_CLIENTE` <br>• Endpoint batch para detectar faltantes en múltiples operaciones <br>• Migración Prisma para nuevo enum value <br>• Documentación completa en `ARQUITECTURA-STORAGE.md` |
+| **3.0** | **2026-01-27** | **Desarrollo** | **Fase 6 Implementada - Módulo de Pagos (Core Completo):** <br>• APIs REST completas para gestión de pagos (CRUD) <br>• Validaciones Zod con soporte para Decimal de Prisma <br>• Cálculo automático de resumen financiero por operación <br>• Actualización automática de `estado_financiero` <br>• Validación de coherencia (pago vs tipo de operación) <br>• Validación de montos máximos (no exceder totales) <br>• Cálculo de saldos pendientes (cobros/pagos) <br>• Cálculo de margen neto (considerando fletes y comisiones) <br>• Endpoint de resumen financiero completo <br>• 4 tipos de pago: PAGO_PROVEEDOR, COBRO_CLIENTE, PAGO_FLETE, PAGO_COMISION <br>• Estados financieros: PENDIENTE, FACTURADA, PAGADA, CERRADA <br>• **MVP Core 90% Completo** - Operaciones + OCs + Documentos + Pagos funcionales |
+| **3.1** | **2026-01-27** | **Desarrollo** | **Fase 7 Implementada - Dashboard y Sistema de Alertas (MVP 95%):** <br>• API de estadísticas del dashboard (`GET /api/dashboard/estadisticas`) <br>• Filtros por período (mes, trimestre, año, todo) <br>• Cálculo de métricas financieras (ingresos, costos, márgenes) <br>• Estadísticas de operaciones (total, por tipo, por estado) <br>• API de alertas completa (`GET /api/dashboard/alertas`) <br>• 4 tipos de alertas: DOCUMENTOS_INCOMPLETOS, PAGO_PENDIENTE, FACTURADA_SIN_PAGAR, OPERACION_ANTIGUA <br>• Priorización automática (ALTA, MEDIA, BAJA) basada en antigüedad <br>• Agrupación por tipo y prioridad <br>• Timeline de actividad reciente (`GET /api/dashboard/actividad-reciente`) <br>• Detección automática de documentos faltantes por operación <br>• Alertas de pagos pendientes con días transcurridos <br>• **Sistema Listo para Producción** - Solo falta conectar UI Mock con APIs reales |
+| **3.3** | **2026-01-27** | **Arquitectura** | **Actualización Modelo de Dominio:** <br>• Agregada entidad `Empresa` para representar organizaciones (proveedores, clientes, transportistas, etc.) <br>• Agregada entidad `Evento` para representar eventos logísticos u operativos <br>• Agregada entidad `Entrega` con relación a `Evento` (1:N) y `Empresa` (N:1) <br>• Las entregas ocurren dentro de eventos (`evento_id` obligatorio) <br>• Las entregas referencian empresas mediante `empresa_id` y opcionalmente `empresa_receptora_id` <br>• Actualizado diagrama de relaciones v3.3 <br>• Modelo preparado para reutilización de información de empresas y trazabilidad de entregas |
 
 ---
 

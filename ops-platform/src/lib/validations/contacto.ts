@@ -50,3 +50,7 @@ export const clienteSchema = contactoBaseSchema.extend({
 export type ProveedorInput = z.infer<typeof proveedorSchema>
 export type ClienteInput = z.infer<typeof clienteSchema>
 
+
+
+
+

@@ -50,3 +50,7 @@ echo "   Password: admin123"
 echo ""
 echo "⚠️  IMPORTANTE: Cambia estas credenciales en producción."
 
+
+
+
+

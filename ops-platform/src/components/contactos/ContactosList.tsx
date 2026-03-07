@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent } from '@/components/ui/card'
 import { ContactoCard } from './ContactoCard'
-import { Search, Plus } from 'lucide-react'
+import { Search, Plus, Users, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -71,54 +72,94 @@ export function ContactosList() {
   const contactos = data?.data || []
   const total = data?.meta.total || 0
 
+  const LoadingState = () => (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Cargando contactos...</p>
+      </CardContent>
+    </Card>
+  )
+
+  const EmptyState = ({ tipo }: { tipo: string }) => (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-4">
+        <Users className="h-16 w-16 text-muted-foreground opacity-50" />
+        <div className="space-y-2">
+          <h3 className="text-xl font-semibold">
+            No se encontraron {tipo === 'proveedor' ? 'proveedores' : 'clientes'}
+          </h3>
+          <p className="text-muted-foreground max-w-md">
+            {buscar
+              ? 'No hay resultados para tu búsqueda. Intenta con otros términos.'
+              : `Aún no tienes ${tipo === 'proveedor' ? 'proveedores' : 'clientes'} registrados. Comienza agregando uno.`}
+          </p>
+        </div>
+        {!buscar && (
+          <Button asChild size="lg" className="mt-4">
+            <Link href={`/contactos/nuevo?tipo=${tipo}`}>
+              <Plus className="h-5 w-5 mr-2" />
+              Agregar {tipo === 'proveedor' ? 'proveedor' : 'cliente'}
+            </Link>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div className="space-y-6">
       <Tabs value={tipo} onValueChange={(v) => setTipo(v as 'proveedor' | 'cliente')}>
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="proveedor">
-              Proveedores {total > 0 && `(${total})`}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <TabsList className="grid w-full sm:w-auto grid-cols-2 h-12">
+            <TabsTrigger value="proveedor" className="text-base font-semibold">
+              <Users className="h-4 w-4 mr-2" />
+              Proveedores {tipo === 'proveedor' && total > 0 && <span className="ml-1">({total})</span>}
             </TabsTrigger>
-            <TabsTrigger value="cliente">
-              Clientes {total > 0 && `(${total})`}
+            <TabsTrigger value="cliente" className="text-base font-semibold">
+              <Users className="h-4 w-4 mr-2" />
+              Clientes {tipo === 'cliente' && total > 0 && <span className="ml-1">({total})</span>}
             </TabsTrigger>
           </TabsList>
 
-          <Button asChild>
+          <Button asChild size="lg" className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto">
             <Link href={`/contactos/nuevo?tipo=${tipo}`}>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-5 w-5 mr-2" />
               Nuevo {tipo === 'proveedor' ? 'Proveedor' : 'Cliente'}
             </Link>
           </Button>
         </div>
 
-        <TabsContent value="proveedor" className="space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre o RUT..."
-                value={buscar}
-                onChange={(e) => setBuscar(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button
-              variant={activo === null ? 'default' : 'outline'}
-              onClick={() => setActivo(activo === null ? 'true' : null)}
-            >
-              {activo === null ? 'Todos' : 'Solo Activos'}
-            </Button>
-          </div>
+        <TabsContent value="proveedor" className="space-y-6 mt-6">
+          <Card className="shadow-lg border-none">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre o RUT..."
+                    value={buscar}
+                    onChange={(e) => setBuscar(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button
+                  variant={activo === null ? 'default' : 'outline'}
+                  onClick={() => setActivo(activo === null ? 'true' : null)}
+                  className="sm:w-auto w-full"
+                >
+                  {activo === null ? 'Todos' : 'Solo Activos'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+            <LoadingState />
           ) : contactos.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron proveedores
-            </div>
+            <EmptyState tipo="proveedor" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {contactos.map((contacto) => (
                 <ContactoCard key={contacto.id} {...contacto} tipo="proveedor" />
               ))}
@@ -126,33 +167,36 @@ export function ContactosList() {
           )}
         </TabsContent>
 
-        <TabsContent value="cliente" className="space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre o RUT..."
-                value={buscar}
-                onChange={(e) => setBuscar(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button
-              variant={activo === null ? 'default' : 'outline'}
-              onClick={() => setActivo(activo === null ? 'true' : null)}
-            >
-              {activo === null ? 'Todos' : 'Solo Activos'}
-            </Button>
-          </div>
+        <TabsContent value="cliente" className="space-y-6 mt-6">
+          <Card className="shadow-lg border-none">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre o RUT..."
+                    value={buscar}
+                    onChange={(e) => setBuscar(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button
+                  variant={activo === null ? 'default' : 'outline'}
+                  onClick={() => setActivo(activo === null ? 'true' : null)}
+                  className="sm:w-auto w-full"
+                >
+                  {activo === null ? 'Todos' : 'Solo Activos'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+            <LoadingState />
           ) : contactos.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron clientes
-            </div>
+            <EmptyState tipo="cliente" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {contactos.map((contacto) => (
                 <ContactoCard key={contacto.id} {...contacto} tipo="cliente" />
               ))}
@@ -163,4 +207,3 @@ export function ContactosList() {
     </div>
   )
 }
-

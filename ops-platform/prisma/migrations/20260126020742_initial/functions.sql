@@ -144,3 +144,7 @@ SELECT
     (SELECT COUNT(*) FROM orden_compra WHERE estado = 'BORRADOR') AS oc_borrador,
     (SELECT COUNT(*) FROM orden_compra WHERE estado = 'ENVIADA') AS oc_enviadas;
 
+
+
+
+

@@ -2,3 +2,7 @@
 // Se irán agregando tipos específicos en archivos separados
 
 export type {}
+
+
+
+

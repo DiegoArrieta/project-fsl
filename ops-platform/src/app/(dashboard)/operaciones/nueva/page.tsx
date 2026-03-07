@@ -16,6 +16,7 @@ import { ArrowLeft, Plus, Trash2, Package, TrendingUp, DollarSign } from 'lucide
 import Link from 'next/link'
 import { mockApi, mockTiposPallet, mockProveedores, mockClientes } from '@/lib/mocks'
 import { toast } from 'sonner'
+import { ProveedoresSelector } from '@/components/operaciones/ProveedoresSelector'
 
 const tiposOperacion = [
   { value: 'COMPRA', label: 'Compra', icon: Package, desc: 'Compra directa a proveedor' },
@@ -36,7 +37,9 @@ function NuevaOperacionForm() {
       then: (schema) => schema.required('Cliente es requerido para ventas'),
       otherwise: (schema) => schema.nullable(),
     }),
-    proveedorId: Yup.string().required('Proveedor es requerido'),
+    proveedores: Yup.array()
+      .min(1, 'Debe agregar al menos un proveedor')
+      .required('Proveedores son requeridos'),
     direccionEntrega: Yup.string().nullable(),
     ordenCompraCliente: Yup.string().nullable(),
     productos: Yup.array()
@@ -71,7 +74,7 @@ function NuevaOperacionForm() {
       tipo: tipoInicial,
       fecha: new Date().toISOString().split('T')[0],
       clienteId: '',
-      proveedorId: '',
+      proveedores: [] as string[],
       direccionEntrega: '',
       ordenCompraCliente: '',
       productos: [] as any[],
@@ -233,27 +236,19 @@ function NuevaOperacionForm() {
               )}
 
               <div>
-                <Label htmlFor="proveedorId">
-                  Proveedor <span className="text-destructive">*</span>
+                <Label htmlFor="proveedores">
+                  Proveedores <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={formik.values.proveedorId}
-                  onValueChange={(value) => formik.setFieldValue('proveedorId', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Buscar proveedor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mockProveedores.map((proveedor) => (
-                      <SelectItem key={proveedor.id} value={proveedor.id}>
-                        {proveedor.razonSocial}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formik.errors.proveedorId && formik.touched.proveedorId && (
-                  <p className="text-sm text-destructive mt-1">{formik.errors.proveedorId}</p>
-                )}
+                <ProveedoresSelector
+                  proveedores={mockProveedores}
+                  proveedoresSeleccionados={formik.values.proveedores}
+                  onChange={(proveedores) => formik.setFieldValue('proveedores', proveedores)}
+                  error={
+                    formik.errors.proveedores && formik.touched.proveedores
+                      ? String(formik.errors.proveedores)
+                      : undefined
+                  }
+                />
               </div>
 
               <div>
@@ -403,8 +398,8 @@ function NuevaOperacionForm() {
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar producto
               </Button>
-              {formik.errors.productos && (
-                <p className="text-sm text-destructive">{formik.errors.productos as string}</p>
+              {formik.errors.productos && typeof formik.errors.productos === 'string' && (
+                <p className="text-sm text-destructive">{formik.errors.productos}</p>
               )}
 
               {formik.values.tipo.startsWith('VENTA_') && totales.totalVenta > 0 && (

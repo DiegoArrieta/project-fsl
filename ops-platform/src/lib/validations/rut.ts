@@ -2,13 +2,13 @@
  * Utilidades para validación de RUT chileno
  * El RUT se almacena sin puntos, solo con guión antes del dígito verificador
  * Formato de almacenamiento: 12345678-9
- * Formato de visualización: 12.345.678-9
+ * Formato de visualización: 12345678-9 (SIN PUNTOS)
  */
 
 /**
  * Normaliza un RUT eliminando puntos y espacios, manteniendo solo el guión antes del dígito verificador
  * @param rut - RUT en cualquier formato (con o sin puntos)
- * @returns RUT normalizado sin puntos (ej: 77442030-4)
+ * @returns RUT normalizado sin puntos (ej: 12345678-9)
  */
 export function normalizeRut(rut: string): string {
   // Eliminar puntos, espacios y convertir a mayúsculas
@@ -29,7 +29,7 @@ export function validateRutFormat(rut: string): boolean {
 
 /**
  * Calcula el dígito verificador de un RUT
- * @param rutBody - Cuerpo del RUT sin guión ni dígito verificador (ej: 77442030)
+ * @param rutBody - Cuerpo del RUT sin guión ni dígito verificador (ej: 12345678)
  * @returns Dígito verificador calculado (K o número)
  */
 export function calculateVerifierDigit(rutBody: string): string {
@@ -75,17 +75,20 @@ export function validateRut(rut: string): boolean {
 }
 
 /**
- * Formatea un RUT para visualización (agrega puntos)
+ * Formatea un RUT para visualización (SIN PUNTOS)
+ * Formato esperado: XXXXXXXX-X
  * @param rut - RUT normalizado (sin puntos)
- * @returns RUT formateado con puntos (ej: 77.442.030-4)
+ * @returns RUT formateado sin puntos (ej: 12345678-9)
  */
 export function formatRutForDisplay(rut: string): string {
   const normalized = normalizeRut(rut)
-  const [rutBody, verifierDigit] = normalized.split('-')
-
-  // Agregar puntos cada 3 dígitos desde la derecha
-  const formattedBody = rutBody.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-
-  return `${formattedBody}-${verifierDigit}`
+  
+  // Si no tiene guión, agregarlo antes del último carácter
+  if (!normalized.includes('-') && normalized.length > 1) {
+    const body = normalized.slice(0, -1)
+    const verifier = normalized.slice(-1)
+    return `${body}-${verifier}`
+  }
+  
+  return normalized
 }
-

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,9 +6,333 @@ datasource db {
   provider = "postgresql"
 }
 
-// ============================================
-// ENUMS
-// ============================================
+model Usuario {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  nombre       String    @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  activo       Boolean   @default(true)
+  ultimoAcceso DateTime? @map("ultimo_acceso") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([activo])
+  @@map("usuario")
+}
+
+model Empresa {
+  id                 String        @id @default(uuid()) @db.Uuid
+  nombre             String        @db.VarChar(255)
+  rut                String        @unique @db.VarChar(12)
+  tipoEmpresa        TipoEmpresa   @map("tipo_empresa")
+  contacto           String?       @db.VarChar(255)
+  direccion          String?       @db.VarChar(500)
+  telefono           String?       @db.VarChar(20)
+  email              String?       @db.VarChar(255)
+  estado             EstadoEmpresa @default(ACTIVA)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  clientes           Cliente[]
+  entregas           Entrega[]     @relation("EmpresaEntrega")
+  entregasReceptoras Entrega[]     @relation("EmpresaReceptora")
+  proveedores        Proveedor[]
+
+  @@index([tipoEmpresa])
+  @@index([estado])
+  @@index([nombre])
+  @@map("empresa")
+}
+
+model Evento {
+  id          String       @id @default(uuid()) @db.Uuid
+  numero      String       @unique @db.VarChar(50)
+  tipo        TipoEvento
+  fechaInicio DateTime     @map("fecha_inicio") @db.Date
+  fechaFin    DateTime?    @map("fecha_fin") @db.Date
+  ubicacion   String?      @db.VarChar(500)
+  descripcion String?
+  estado      EstadoEvento @default(PLANIFICADO)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+  entregas    Entrega[]
+  operacion   Operacion?
+
+  @@index([tipo])
+  @@index([estado])
+  @@index([fechaInicio(sort: Desc)])
+  @@map("evento")
+}
+
+model Entrega {
+  id                 String        @id @default(uuid()) @db.Uuid
+  eventoId           String        @map("evento_id") @db.Uuid
+  empresaId          String        @map("empresa_id") @db.Uuid
+  empresaReceptoraId String?       @map("empresa_receptora_id") @db.Uuid
+  fechaHora          DateTime      @map("fecha_hora") @db.Timestamp(6)
+  tipoEntrega        TipoEntrega   @map("tipo_entrega")
+  descripcion        String?
+  cantidad           Decimal       @db.Decimal(12, 2)
+  unidad             String        @db.VarChar(50)
+  estado             EstadoEntrega @default(PENDIENTE)
+  observaciones      String?
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  empresa            Empresa       @relation("EmpresaEntrega", fields: [empresaId], references: [id])
+  empresaReceptora   Empresa?      @relation("EmpresaReceptora", fields: [empresaReceptoraId], references: [id])
+  evento             Evento        @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+
+  @@index([eventoId])
+  @@index([empresaId])
+  @@index([empresaReceptoraId])
+  @@index([fechaHora(sort: Desc)])
+  @@index([estado])
+  @@map("entrega")
+}
+
+model Proveedor {
+  id             String               @id @default(uuid()) @db.Uuid
+  rut            String               @unique @db.VarChar(12)
+  razonSocial    String               @map("razon_social") @db.VarChar(255)
+  nombreFantasia String?              @map("nombre_fantasia") @db.VarChar(255)
+  direccion      String?              @db.VarChar(500)
+  comuna         String?              @db.VarChar(100)
+  ciudad         String?              @db.VarChar(100)
+  telefono       String?              @db.VarChar(20)
+  email          String?              @db.VarChar(255)
+  activo         Boolean              @default(true)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
+  empresaId      String?              @map("empresa_id") @db.Uuid
+  operaciones    OperacionProveedor[]
+  ordenesCompra  OrdenCompra[]
+  empresa        Empresa?             @relation(fields: [empresaId], references: [id])
+
+  @@index([activo])
+  @@index([empresaId])
+  @@map("proveedor")
+}
+
+model OperacionProveedor {
+  id          String    @id @default(uuid()) @db.Uuid
+  operacionId String    @map("operacion_id") @db.Uuid
+  proveedorId String    @map("proveedor_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  operacion   Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id])
+
+  @@unique([operacionId, proveedorId])
+  @@index([operacionId])
+  @@index([proveedorId])
+  @@map("operacion_proveedor")
+}
+
+model Cliente {
+  id             String        @id @default(uuid()) @db.Uuid
+  rut            String        @unique @db.VarChar(12)
+  razonSocial    String        @map("razon_social") @db.VarChar(255)
+  nombreFantasia String?       @map("nombre_fantasia") @db.VarChar(255)
+  direccion      String?       @db.VarChar(500)
+  comuna         String?       @db.VarChar(100)
+  ciudad         String?       @db.VarChar(100)
+  telefono       String?       @db.VarChar(20)
+  email          String?       @db.VarChar(255)
+  activo         Boolean       @default(true)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  empresaId      String?       @map("empresa_id") @db.Uuid
+  empresa        Empresa?      @relation(fields: [empresaId], references: [id])
+  operaciones    Operacion[]
+  presupuestos   Presupuesto[]
+
+  @@index([activo])
+  @@index([empresaId])
+  @@map("cliente")
+}
+
+model TipoPallet {
+  id                    String             @id @default(uuid()) @db.Uuid
+  codigo                String             @unique @db.VarChar(10)
+  nombre                String             @db.VarChar(100)
+  descripcion           String?
+  requiereCertificacion Boolean            @default(false) @map("requiere_certificacion")
+  activo                Boolean            @default(true)
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  operacionLineas       OperacionLinea[]
+  ordenCompraLineas     OrdenCompraLinea[]
+  presupuestoLineas     PresupuestoLinea[]
+
+  @@map("tipo_pallet")
+}
+
+model Operacion {
+  id                    String               @id @default(uuid()) @db.Uuid
+  numero                String               @unique @db.VarChar(20)
+  tipo                  TipoOperacion
+  fecha                 DateTime             @db.Date
+  clienteId             String?              @map("cliente_id") @db.Uuid
+  estadoDocumental      EstadoDocumental     @default(INCOMPLETA) @map("estado_documental")
+  estadoFinanciero      EstadoFinanciero     @default(PENDIENTE) @map("estado_financiero")
+  direccionEntrega      String?              @map("direccion_entrega") @db.VarChar(500)
+  ordenCompraCliente    String?              @map("orden_compra_cliente") @db.VarChar(50)
+  ordenCompraGeneradaId String?              @unique @map("orden_compra_generada_id") @db.Uuid
+  observaciones         String?
+  observacionCierre     String?              @map("observacion_cierre")
+  fechaCierre           DateTime?            @map("fecha_cierre") @db.Timestamp(6)
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
+  eventoId              String?              @unique @map("evento_id") @db.Uuid
+  presupuestoId         String?              @unique @map("presupuesto_id") @db.Uuid
+  documentos            Documento[]
+  factoring             Factoring?
+  cliente               Cliente?             @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  evento                Evento?              @relation(fields: [eventoId], references: [id])
+  presupuesto           Presupuesto?         @relation(fields: [presupuestoId], references: [id])
+  ordenCompraGenerada   OrdenCompra?         @relation("OperacionOrdenCompraGenerada", fields: [ordenCompraGeneradaId], references: [id])
+  lineas                OperacionLinea[]
+  proveedores           OperacionProveedor[]
+  ordenesCompra         OrdenCompra[]        @relation("OperacionOrdenesCompra")
+  pagos                 Pago[]
+
+  @@index([tipo])
+  @@index([fecha(sort: Desc)])
+  @@index([clienteId])
+  @@index([estadoDocumental])
+  @@index([estadoFinanciero])
+  @@index([ordenCompraGeneradaId])
+  @@index([presupuestoId])
+  @@index([createdAt(sort: Desc)])
+  @@map("operacion")
+}
+
+model OperacionLinea {
+  id                   String     @id @default(uuid()) @db.Uuid
+  operacionId          String     @map("operacion_id") @db.Uuid
+  tipoPalletId         String     @map("tipo_pallet_id") @db.Uuid
+  cantidad             Int
+  cantidadEntregada    Int        @default(0) @map("cantidad_entregada")
+  cantidadDanada       Int        @default(0) @map("cantidad_danada")
+  precioUnitario       Decimal?   @map("precio_unitario") @db.Decimal(12, 2)
+  precioVentaUnitario  Decimal?   @map("precio_venta_unitario") @db.Decimal(12, 2)
+  precioCompraUnitario Decimal?   @map("precio_compra_unitario") @db.Decimal(12, 2)
+  descripcionProducto  String?    @map("descripcion_producto") @db.VarChar(255)
+  createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  operacion            Operacion  @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+  tipoPallet           TipoPallet @relation(fields: [tipoPalletId], references: [id])
+
+  @@index([operacionId])
+  @@index([tipoPalletId])
+  @@index([operacionId, tipoPalletId])
+  @@map("operacion_linea")
+}
+
+model Documento {
+  id                String        @id @default(uuid()) @db.Uuid
+  operacionId       String        @map("operacion_id") @db.Uuid
+  tipo              TipoDocumento
+  numeroDocumento   String?       @map("numero_documento") @db.VarChar(50)
+  fechaDocumento    DateTime?     @map("fecha_documento") @db.Date
+  archivoUrl        String        @map("archivo_url") @db.VarChar(500)
+  archivoNombre     String        @map("archivo_nombre") @db.VarChar(255)
+  archivoTipo       String        @map("archivo_tipo") @db.VarChar(50)
+  archivoSize       Int           @map("archivo_size")
+  esObligatorio     Boolean       @default(false) @map("es_obligatorio")
+  observaciones     String?
+  choferNombre      String?       @map("chofer_nombre") @db.VarChar(100)
+  choferRut         String?       @map("chofer_rut") @db.VarChar(12)
+  vehiculoPatente   String?       @map("vehiculo_patente") @db.VarChar(10)
+  transportista     String?       @db.VarChar(255)
+  cantidadDocumento Int?          @map("cantidad_documento")
+  cantidadDanada    Int?          @map("cantidad_danada")
+  uploadedAt        DateTime      @default(now()) @map("uploaded_at") @db.Timestamp(6)
+  operacion         Operacion     @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+
+  @@index([operacionId])
+  @@index([tipo])
+  @@index([numeroDocumento])
+  @@index([operacionId, esObligatorio])
+  @@index([uploadedAt(sort: Desc)])
+  @@map("documento")
+}
+
+model Pago {
+  id            String    @id @default(uuid()) @db.Uuid
+  operacionId   String    @map("operacion_id") @db.Uuid
+  tipo          TipoPago
+  monto         Decimal   @db.Decimal(12, 2)
+  fechaPago     DateTime  @map("fecha_pago") @db.Date
+  metodoPago    String?   @map("metodo_pago") @db.VarChar(50)
+  referencia    String?   @db.VarChar(100)
+  banco         String?   @db.VarChar(100)
+  observaciones String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  operacion     Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+
+  @@index([operacionId])
+  @@index([tipo])
+  @@index([fechaPago(sort: Desc)])
+  @@index([operacionId, tipo])
+  @@map("pago")
+}
+
+model Factoring {
+  id                String    @id @default(uuid()) @db.Uuid
+  operacionId       String    @unique @map("operacion_id") @db.Uuid
+  empresaFactoring  String    @map("empresa_factoring") @db.VarChar(255)
+  fechaFactoring    DateTime  @map("fecha_factoring") @db.Date
+  montoFactura      Decimal   @map("monto_factura") @db.Decimal(12, 2)
+  montoAdelantado   Decimal   @map("monto_adelantado") @db.Decimal(12, 2)
+  comisionFactoring Decimal?  @map("comision_factoring") @db.Decimal(12, 2)
+  fechaVencimiento  DateTime? @map("fecha_vencimiento") @db.Date
+  observaciones     String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  operacion         Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+
+  @@index([empresaFactoring])
+  @@index([fechaVencimiento])
+  @@map("factoring")
+}
+
+model OrdenCompra {
+  id                String             @id @default(uuid()) @db.Uuid
+  numero            String             @unique @db.VarChar(20)
+  proveedorId       String             @map("proveedor_id") @db.Uuid
+  fecha             DateTime           @db.Date
+  fechaEntrega      DateTime?          @map("fecha_entrega") @db.Date
+  direccionEntrega  String?            @map("direccion_entrega") @db.VarChar(500)
+  observaciones     String?
+  operacionId       String?            @map("operacion_id") @db.Uuid
+  estado            EstadoOC           @default(BORRADOR)
+  pdfGenerado       Boolean            @default(false) @map("pdf_generado")
+  pdfUrl            String?            @map("pdf_url") @db.VarChar(500)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
+  operacionGenerada Operacion?         @relation("OperacionOrdenCompraGenerada")
+  operacion         Operacion?         @relation("OperacionOrdenesCompra", fields: [operacionId], references: [id])
+  proveedor         Proveedor          @relation(fields: [proveedorId], references: [id])
+  lineas            OrdenCompraLinea[]
+
+  @@index([proveedorId])
+  @@index([fecha(sort: Desc)])
+  @@index([operacionId])
+  @@index([estado])
+  @@map("orden_compra")
+}
+
+model OrdenCompraLinea {
+  id             String      @id @default(uuid()) @db.Uuid
+  ordenCompraId  String      @map("orden_compra_id") @db.Uuid
+  tipoPalletId   String      @map("tipo_pallet_id") @db.Uuid
+  cantidad       Int
+  precioUnitario Decimal?    @map("precio_unitario") @db.Decimal(12, 2)
+  descripcion    String?     @db.VarChar(255)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  ordenCompra    OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+  tipoPallet     TipoPallet  @relation(fields: [tipoPalletId], references: [id])
+
+  @@index([ordenCompraId])
+  @@index([tipoPalletId])
+  @@map("orden_compra_linea")
+}
 
 enum TipoOperacion {
   COMPRA
@@ -38,6 +359,7 @@ enum TipoDocumento {
   FACTURA
   CERTIFICADO_NIMF15
   OTRO
+  ORDEN_COMPRA_CLIENTE
 }
 
 enum TipoPago {
@@ -54,251 +376,113 @@ enum EstadoOC {
   CANCELADA
 }
 
-// ============================================
-// MODELS
-// ============================================
-
-model Usuario {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String    @unique @db.VarChar(255)
-  nombre        String    @db.VarChar(255)
-  passwordHash  String    @map("password_hash") @db.VarChar(255) // bcrypt hash, salt rounds: 10
-  activo        Boolean   @default(true)
-  ultimoAcceso  DateTime? @map("ultimo_acceso") @db.Timestamp(6)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  @@index([activo])
-  @@map("usuario")
+enum TipoEmpresa {
+  PROVEEDOR
+  CLIENTE
+  TRANSPORTISTA
+  OTRO
 }
 
-model Proveedor {
-  id             String    @id @default(uuid()) @db.Uuid
-  rut            String    @unique @db.VarChar(12)
-  razonSocial    String    @map("razon_social") @db.VarChar(255)
-  nombreFantasia String?   @map("nombre_fantasia") @db.VarChar(255)
-  direccion      String?   @db.VarChar(500)
-  comuna         String?   @db.VarChar(100)
-  ciudad         String?   @db.VarChar(100)
-  telefono       String?   @db.VarChar(20)
-  email          String?   @db.VarChar(255)
-  activo         Boolean   @default(true)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  operaciones    Operacion[]
-  ordenesCompra  OrdenCompra[]
-
-  @@index([activo])
-  @@map("proveedor")
+enum EstadoEmpresa {
+  ACTIVA
+  INACTIVA
 }
 
-model Cliente {
-  id             String    @id @default(uuid()) @db.Uuid
-  rut            String    @unique @db.VarChar(12)
-  razonSocial    String    @map("razon_social") @db.VarChar(255)
-  nombreFantasia String?   @map("nombre_fantasia") @db.VarChar(255)
-  direccion      String?   @db.VarChar(500)
-  comuna         String?   @db.VarChar(100)
-  ciudad         String?   @db.VarChar(100)
-  telefono       String?   @db.VarChar(20)
-  email          String?   @db.VarChar(255)
-  activo         Boolean   @default(true)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  operaciones    Operacion[]
-
-  @@index([activo])
-  @@map("cliente")
+enum TipoEvento {
+  ENTREGA
+  RECEPCION
+  TRASLADO
+  OTRO
 }
 
-model TipoPallet {
-  id                    String    @id @default(uuid()) @db.Uuid
-  codigo                String    @unique @db.VarChar(10)
-  nombre                String    @db.VarChar(100)
-  descripcion           String?   @db.Text
-  requiereCertificacion Boolean   @default(false) @map("requiere_certificacion")
-  activo                Boolean   @default(true)
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  operacionLineas       OperacionLinea[]
-  ordenCompraLineas     OrdenCompraLinea[]
-
-  @@map("tipo_pallet")
+enum EstadoEvento {
+  PLANIFICADO
+  EN_CURSO
+  COMPLETADO
+  CANCELADO
 }
 
-model Operacion {
-  id                    String            @id @default(uuid()) @db.Uuid
-  numero                String            @unique @db.VarChar(20) // OP-YYYY-NNNNN
-  tipo                  TipoOperacion
-  fecha                 DateTime          @db.Date
-  proveedorId           String?           @map("proveedor_id") @db.Uuid
-  clienteId             String?           @map("cliente_id") @db.Uuid
-  estadoDocumental      EstadoDocumental  @default(INCOMPLETA) @map("estado_documental")
-  estadoFinanciero      EstadoFinanciero  @default(PENDIENTE) @map("estado_financiero")
-  direccionEntrega      String?           @map("direccion_entrega") @db.VarChar(500)
-  ordenCompraCliente    String?           @map("orden_compra_cliente") @db.VarChar(50)
-  ordenCompraGeneradaId String?           @unique @map("orden_compra_generada_id") @db.Uuid
-  observaciones         String?           @db.Text
-  observacionCierre     String?           @map("observacion_cierre") @db.Text
-  fechaCierre           DateTime?         @map("fecha_cierre") @db.Timestamp(6)
-  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+enum TipoEntrega {
+  COMPLETA
+  PARCIAL
+  DEVOLUCION
+  OTRO
+}
 
-  proveedor             Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
-  cliente               Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  ordenCompraGenerada   OrdenCompra?      @relation("OperacionOrdenCompraGenerada", fields: [ordenCompraGeneradaId], references: [id], onDelete: SetNull)
-  ordenesCompra         OrdenCompra[]     @relation("OperacionOrdenesCompra")
-  lineas                OperacionLinea[]
-  documentos            Documento[]
-  pagos                 Pago[]
-  factoring             Factoring?
+enum EstadoEntrega {
+  PENDIENTE
+  EN_TRANSITO
+  COMPLETADA
+  RECHAZADA
+}
 
-  @@index([tipo])
-  @@index([fecha(sort: Desc)])
-  @@index([proveedorId])
+model Presupuesto {
+  id            String   @id @default(uuid()) @db.Uuid
+  numero        String   @unique @db.VarChar(20)
+  clienteId     String   @map("cliente_id") @db.Uuid
+  fecha         DateTime @db.Date
+  ciudad        String?  @db.VarChar(100)
+  direccion     String?  @db.VarChar(500)
+  observaciones String?  @db.Text
+
+  subtotal Decimal @db.Decimal(12, 2)
+  iva      Decimal @db.Decimal(12, 2)
+  total    Decimal @db.Decimal(12, 2)
+
+  estado EstadoPresupuesto @default(BORRADOR)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  cliente   Cliente            @relation(fields: [clienteId], references: [id])
+  lineas    PresupuestoLinea[]
+  operacion Operacion?
+
   @@index([clienteId])
-  @@index([estadoDocumental])
-  @@index([estadoFinanciero])
-  @@index([ordenCompraGeneradaId])
-  @@index([createdAt(sort: Desc)])
-  @@map("operacion")
-}
-
-model OperacionLinea {
-  id                  String   @id @default(uuid()) @db.Uuid
-  operacionId         String   @map("operacion_id") @db.Uuid
-  tipoPalletId        String   @map("tipo_pallet_id") @db.Uuid
-  cantidad            Int
-  cantidadEntregada   Int      @default(0) @map("cantidad_entregada")
-  cantidadDanada      Int      @default(0) @map("cantidad_danada")
-  precioUnitario      Decimal? @map("precio_unitario") @db.Decimal(12, 2) // Para COMPRA
-  precioVentaUnitario Decimal? @map("precio_venta_unitario") @db.Decimal(12, 2) // Para VENTA_*
-  precioCompraUnitario Decimal? @map("precio_compra_unitario") @db.Decimal(12, 2) // Para VENTA_*
-  descripcionProducto String?  @map("descripcion_producto") @db.VarChar(255)
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  operacion           Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
-  tipoPallet          TipoPallet @relation(fields: [tipoPalletId], references: [id], onDelete: Restrict)
-
-  @@index([operacionId])
-  @@index([tipoPalletId])
-  @@index([operacionId, tipoPalletId])
-  @@map("operacion_linea")
-}
-
-model Documento {
-  id              String        @id @default(uuid()) @db.Uuid
-  operacionId     String        @map("operacion_id") @db.Uuid
-  tipo            TipoDocumento
-  numeroDocumento String?       @map("numero_documento") @db.VarChar(50)
-  fechaDocumento  DateTime?     @map("fecha_documento") @db.Date
-  archivoUrl      String        @map("archivo_url") @db.VarChar(500)
-  archivoNombre   String        @map("archivo_nombre") @db.VarChar(255)
-  archivoTipo     String        @map("archivo_tipo") @db.VarChar(50)
-  archivoSize     Int           @map("archivo_size")
-  esObligatorio   Boolean       @default(false) @map("es_obligatorio")
-  observaciones   String?       @db.Text
-  choferNombre    String?       @map("chofer_nombre") @db.VarChar(100)
-  choferRut       String?       @map("chofer_rut") @db.VarChar(12)
-  vehiculoPatente String?       @map("vehiculo_patente") @db.VarChar(10)
-  transportista   String?       @db.VarChar(255)
-  cantidadDocumento Int?        @map("cantidad_documento")
-  cantidadDanada    Int?        @map("cantidad_danada")
-  uploadedAt        DateTime    @default(now()) @map("uploaded_at") @db.Timestamp(6)
-
-  operacion       Operacion     @relation(fields: [operacionId], references: [id], onDelete: Cascade)
-
-  @@index([operacionId])
-  @@index([tipo])
-  @@index([numeroDocumento])
-  @@index([operacionId, esObligatorio])
-  @@index([uploadedAt(sort: Desc)])
-  @@map("documento")
-}
-
-model Pago {
-  id            String    @id @default(uuid()) @db.Uuid
-  operacionId   String    @map("operacion_id") @db.Uuid
-  tipo          TipoPago
-  monto         Decimal   @db.Decimal(12, 2)
-  fechaPago     DateTime  @map("fecha_pago") @db.Date
-  metodoPago    String?   @map("metodo_pago") @db.VarChar(50)
-  referencia    String?   @db.VarChar(100)
-  banco         String?   @db.VarChar(100)
-  observaciones String?   @db.Text
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  operacion     Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
-
-  @@index([operacionId])
-  @@index([tipo])
-  @@index([fechaPago(sort: Desc)])
-  @@index([operacionId, tipo])
-  @@map("pago")
-}
-
-model Factoring {
-  id                String    @id @default(uuid()) @db.Uuid
-  operacionId       String    @unique @map("operacion_id") @db.Uuid
-  empresaFactoring String    @map("empresa_factoring") @db.VarChar(255)
-  fechaFactoring    DateTime  @map("fecha_factoring") @db.Date
-  montoFactura      Decimal   @map("monto_factura") @db.Decimal(12, 2)
-  montoAdelantado   Decimal   @map("monto_adelantado") @db.Decimal(12, 2)
-  comisionFactoring Decimal?  @map("comision_factoring") @db.Decimal(12, 2)
-  fechaVencimiento  DateTime? @map("fecha_vencimiento") @db.Date
-  observaciones     String?   @db.Text
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  operacion         Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
-
-  @@index([empresaFactoring])
-  @@index([fechaVencimiento])
-  @@map("factoring")
-}
-
-model OrdenCompra {
-  id                String    @id @default(uuid()) @db.Uuid
-  numero            String    @unique @db.VarChar(20) // OC-YYYY-NNNNN
-  proveedorId       String    @map("proveedor_id") @db.Uuid
-  fecha             DateTime  @db.Date
-  fechaEntrega      DateTime? @map("fecha_entrega") @db.Date
-  direccionEntrega  String?   @map("direccion_entrega") @db.VarChar(500)
-  observaciones     String?   @db.Text
-  operacionId       String?   @map("operacion_id") @db.Uuid
-  estado            EstadoOC  @default(BORRADOR)
-  pdfGenerado       Boolean   @default(false) @map("pdf_generado")
-  pdfUrl            String?   @map("pdf_url") @db.VarChar(500)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  proveedor         Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
-  operacion         Operacion? @relation("OperacionOrdenesCompra", fields: [operacionId], references: [id], onDelete: SetNull)
-  operacionGenerada Operacion? @relation("OperacionOrdenCompraGenerada")
-  lineas            OrdenCompraLinea[]
-
-  @@index([proveedorId])
   @@index([fecha(sort: Desc)])
-  @@index([operacionId])
-  @@index([estado])
-  @@map("orden_compra")
+  @@map("presupuesto")
 }
 
-model OrdenCompraLinea {
-  id            String       @id @default(uuid()) @db.Uuid
-  ordenCompraId String       @map("orden_compra_id") @db.Uuid
-  tipoPalletId  String       @map("tipo_pallet_id") @db.Uuid
-  cantidad      Int
-  precioUnitario Decimal?    @map("precio_unitario") @db.Decimal(12, 2)
-  descripcion   String?      @db.VarChar(255)
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+model PresupuestoLinea {
+  id            String @id @default(uuid()) @db.Uuid
+  presupuestoId String @map("presupuesto_id") @db.Uuid
+  tipoPalletId  String @map("tipo_pallet_id") @db.Uuid
 
-  ordenCompra  OrdenCompra  @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
-  tipoPallet   TipoPallet   @relation(fields: [tipoPalletId], references: [id], onDelete: Restrict)
+  cantidad       Int
+  precioUnitario Decimal @db.Decimal(12, 2)
 
-  @@index([ordenCompraId])
+  descripcion String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  presupuesto Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  tipoPallet  TipoPallet  @relation(fields: [tipoPalletId], references: [id])
+
+  @@index([presupuestoId])
   @@index([tipoPalletId])
-  @@map("orden_compra_linea")
+  @@map("presupuesto_linea")
 }
 
+model DocumentSequence {
+  id        String        @id @default(uuid()) @db.Uuid
+  tipo      TipoSecuencia
+  year      Int
+  lastValue Int
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@unique([tipo, year])
+  @@map("document_sequence")
+}
+
+enum EstadoPresupuesto {
+  BORRADOR
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+}
+
+enum TipoSecuencia {
+  PRESUPUESTO
+  OPERACION
+  ORDEN_COMPRA
+}

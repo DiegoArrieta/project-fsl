@@ -75,3 +75,7 @@ El archivo `.env.local` ya está configurado con:
 
 **⚠️ IMPORTANTE**: Cambia estas credenciales en producción.
 
+
+
+
+
