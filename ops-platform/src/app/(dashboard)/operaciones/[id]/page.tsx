@@ -1,35 +1,67 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { mockOperaciones } from '@/lib/mocks'
-import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock } from 'lucide-react'
+import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
+import { calcularTotalesDesdeLineas, isDocumentoPresente } from '@/lib/operaciones/operacion-ui-helpers'
+import type {
+  DocumentoOperacionApi,
+  OperacionApi,
+  OperacionLineaApi,
+  OperacionProveedorRowApi,
+  PagoOperacionApi,
+} from '@/types/operacion-api'
+
+async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
+  const response = await fetch(`/api/operaciones/${id}`)
+  if (response.status === 404) {
+    return null
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'Error al cargar la operación')
+  }
+  const json = await response.json()
+  return json.data as OperacionApi
+}
 
 export default function OperacionDetallePage() {
   const params = useParams()
   const id = params.id as string
-  const [operacion, setOperacion] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const op = mockOperaciones.find((o) => o.id === id)
-    if (op) {
-      setOperacion(op)
-      setLoading(false)
-    }
-  }, [id])
+  const {
+    data: operacion,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['operacion', id],
+    queryFn: () => fetchOperacionById(id),
+    enabled: Boolean(id),
+  })
 
-  if (loading) {
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center gap-4 min-h-[240px]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+        <p className="text-muted-foreground">Cargando operación…</p>
+      </div>
+    )
+  }
+
+  if (error) {
     return (
       <div className="container mx-auto py-8">
-        <div className="text-center">Cargando...</div>
+        <div className="text-center text-destructive text-sm">{(error as Error).message}</div>
+        <Button asChild className="mt-4 block mx-auto">
+          <Link href="/operaciones">Volver a Operaciones</Link>
+        </Button>
       </div>
     )
   }
@@ -47,6 +79,12 @@ export default function OperacionDetallePage() {
     )
   }
 
+  const lineas = operacion.lineas || []
+  const documentos = operacion.documentos || []
+  const pagos = operacion.pagos || []
+  const totales = calcularTotalesDesdeLineas(operacion.tipo, lineas)
+  const docsPresentes = documentos.filter((d: DocumentoOperacionApi) => isDocumentoPresente(d)).length
+
   const getTipoBadge = (tipo: string) => {
     const tipos: Record<string, { label: string; className: string }> = {
       COMPRA: { label: '📦 COMPRA', className: 'bg-blue-500' },
@@ -57,17 +95,20 @@ export default function OperacionDetallePage() {
     return <Badge className={config.className}>{config.label}</Badge>
   }
 
+  const labelProducto = (linea: OperacionLineaApi) =>
+    linea.tipoPallet?.nombre || linea.tipoPallet?.codigo || 'Producto'
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/operaciones">
+            <Link href="/operaciones" aria-label="Volver al listado de operaciones">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-bold">{operacion.numero}</h1>
               {getTipoBadge(operacion.tipo)}
             </div>
@@ -77,14 +118,13 @@ export default function OperacionDetallePage() {
           </div>
         </div>
         {operacion.estadoFinanciero !== 'CERRADA' && (
-          <Button variant="outline">
+          <Button variant="outline" type="button">
             <Edit className="h-4 w-4 mr-2" />
             Editar
           </Button>
         )}
       </div>
 
-      {/* Información General */}
       <Card>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -96,11 +136,14 @@ export default function OperacionDetallePage() {
                 </p>
               </div>
             )}
-            {operacion.proveedor && (
+            {operacion.proveedores && operacion.proveedores.length > 0 && (
               <div>
-                <span className="text-sm text-muted-foreground">Proveedor:</span>
+                <span className="text-sm text-muted-foreground">Proveedor(es):</span>
                 <p className="font-medium">
-                  {operacion.proveedor.razonSocial} ({formatRutForDisplay(operacion.proveedor.rut)})
+                  {operacion.proveedores
+                    .map((op: OperacionProveedorRowApi) => op.proveedor?.razonSocial)
+                    .filter(Boolean)
+                    .join(', ')}
                 </p>
               </div>
             )}
@@ -117,11 +160,10 @@ export default function OperacionDetallePage() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4 mt-4">
+          <div className="flex items-center gap-4 mt-4 flex-wrap">
             <Badge variant={operacion.estadoDocumental === 'COMPLETA' ? 'default' : 'destructive'}>
-              {operacion.estadoDocumental === 'COMPLETA' ? '🟢' : '🔴'} Docs:{' '}
-              {operacion.documentos?.filter((d: any) => d.presente).length || 0}/
-              {operacion.documentos?.length || 0} - {operacion.estadoDocumental}
+              {operacion.estadoDocumental === 'COMPLETA' ? '🟢' : '🔴'} Docs: {docsPresentes}/
+              {documentos.length} — {operacion.estadoDocumental}
             </Badge>
             <Badge variant={operacion.estadoFinanciero === 'CERRADA' ? 'default' : 'secondary'}>
               {operacion.estadoFinanciero === 'PENDIENTE'
@@ -137,7 +179,6 @@ export default function OperacionDetallePage() {
         </CardContent>
       </Card>
 
-      {/* Productos */}
       <Card>
         <CardHeader>
           <CardTitle>Productos</CardTitle>
@@ -149,62 +190,74 @@ export default function OperacionDetallePage() {
                 <tr className="border-b">
                   <th className="text-left p-2">Producto</th>
                   <th className="text-left p-2">Cant.</th>
-                  <th className="text-left p-2">Recibido</th>
+                  <th className="text-left p-2">Entregado</th>
                   <th className="text-left p-2">Dañados</th>
-                  {operacion.tipo.startsWith('VENTA_') && (
+                  {String(operacion.tipo).startsWith('VENTA_') && (
                     <>
                       <th className="text-left p-2">Precio Venta</th>
                       <th className="text-left p-2">Precio Compra</th>
-                      <th className="text-left p-2">Margen</th>
+                      <th className="text-left p-2">Margen u.</th>
                     </>
                   )}
+                  {operacion.tipo === 'COMPRA' && <th className="text-left p-2">Precio unit.</th>}
                 </tr>
               </thead>
               <tbody>
-                {operacion.productos.map((producto: any, idx: number) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{producto.tipo}</td>
-                    <td className="p-2">{producto.cantidad}</td>
-                    <td className="p-2">
-                      {producto.cantidadEntregada} {producto.cantidadEntregada === producto.cantidad ? '✓' : ''}
-                    </td>
-                    <td className="p-2">
-                      {producto.cantidadDanada > 0 && (
-                        <span className="text-destructive">⚠️ {producto.cantidadDanada}</span>
+                {lineas.map((producto: OperacionLineaApi) => {
+                  const pv = Number(producto.precioVentaUnitario ?? 0)
+                  const pc = Number(producto.precioCompraUnitario ?? 0)
+                  const margenU = pv - pc
+                  return (
+                    <tr key={producto.id || `${producto.tipoPalletId}-${producto.cantidad}`} className="border-b">
+                      <td className="p-2">{labelProducto(producto)}</td>
+                      <td className="p-2">{producto.cantidad}</td>
+                      <td className="p-2">
+                        {producto.cantidadEntregada}{' '}
+                        {producto.cantidadEntregada === producto.cantidad ? '✓' : ''}
+                      </td>
+                      <td className="p-2">
+                        {producto.cantidadDanada > 0 ? (
+                          <span className="text-destructive">⚠️ {producto.cantidadDanada}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      {String(operacion.tipo).startsWith('VENTA_') && (
+                        <>
+                          <td className="p-2">${pv.toLocaleString('es-CL')}</td>
+                          <td className="p-2">${pc.toLocaleString('es-CL')}</td>
+                          <td className="p-2">${margenU.toLocaleString('es-CL')}</td>
+                        </>
                       )}
-                      {producto.cantidadDanada === 0 && '-'}
-                    </td>
-                    {operacion.tipo.startsWith('VENTA_') && (
-                      <>
-                        <td className="p-2">${(producto.precioVenta || 0).toLocaleString('es-CL')}</td>
-                        <td className="p-2">${(producto.precioCompra || 0).toLocaleString('es-CL')}</td>
+                      {operacion.tipo === 'COMPRA' && (
                         <td className="p-2">
-                          ${((producto.precioVenta || 0) - (producto.precioCompra || 0)).toLocaleString('es-CL')}
+                          ${Number(producto.precioUnitario ?? 0).toLocaleString('es-CL')}
                         </td>
-                      </>
-                    )}
-                  </tr>
-                ))}
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
-          {operacion.tipo.startsWith('VENTA_') && (
+          {String(operacion.tipo).startsWith('VENTA_') && lineas.length > 0 && (
             <Card className="mt-4">
               <CardContent className="pt-6">
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Total Venta:</span>
-                    <span className="font-semibold">${operacion.totalVenta.toLocaleString('es-CL')}</span>
+                    <span className="font-semibold">${totales.totalVenta.toLocaleString('es-CL')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Total Compra:</span>
-                    <span className="font-semibold">${operacion.totalCompra.toLocaleString('es-CL')}</span>
+                    <span>Total Compra (est.):</span>
+                    <span className="font-semibold">${totales.totalCompra.toLocaleString('es-CL')}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span>Margen Bruto:</span>
                     <span className="font-semibold">
-                      ${operacion.margenBruto.toLocaleString('es-CL')} ({operacion.margenPorcentual.toFixed(1)}%)
+                      ${totales.margenBruto.toLocaleString('es-CL')} (
+                      {totales.margenPorcentual.toFixed(1)}%)
                     </span>
                   </div>
                 </div>
@@ -214,19 +267,17 @@ export default function OperacionDetallePage() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
       <Tabs defaultValue="documentos" className="space-y-4">
         <TabsList>
           <TabsTrigger value="documentos">
             <FileText className="h-4 w-4 mr-2" />
-            Documentos ({operacion.documentos?.filter((d: any) => d.presente).length || 0}/
-            {operacion.documentos?.length || 0})
+            Documentos ({docsPresentes}/{documentos.length})
           </TabsTrigger>
           <TabsTrigger value="pagos">
             <DollarSign className="h-4 w-4 mr-2" />
-            Pagos ({operacion.pagos?.length || 0})
+            Pagos ({pagos.length})
           </TabsTrigger>
-          {operacion.tipo.startsWith('VENTA_') && (
+          {String(operacion.tipo).startsWith('VENTA_') && (
             <TabsTrigger value="factoring">
               <Building2 className="h-4 w-4 mr-2" />
               Factoring
@@ -239,49 +290,42 @@ export default function OperacionDetallePage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Documentos</CardTitle>
               {operacion.estadoFinanciero !== 'CERRADA' && (
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" type="button">
                   <FileText className="h-4 w-4 mr-2" />
                   Adjuntar
                 </Button>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {operacion.documentos?.map((doc: any) => (
-                <div
-                  key={doc.id}
-                  className={`flex items-center justify-between p-3 rounded-md border ${
-                    doc.presente ? 'bg-background' : 'bg-destructive/10 border-destructive'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span>{doc.presente ? '✅' : '❌'}</span>
-                    <div>
-                      <p className="font-medium">{doc.tipo.replace('_', ' ')}</p>
-                      {doc.numero && <p className="text-sm text-muted-foreground">N° {doc.numero}</p>}
-                      {!doc.presente && <p className="text-sm text-destructive">← ¡FALTANTE!</p>}
+              {documentos.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No hay documentos registrados</p>
+              ) : (
+                documentos.map((doc: DocumentoOperacionApi) => {
+                  const presente = isDocumentoPresente(doc)
+                  const labelTipo = String(doc.tipo || '').replace(/_/g, ' ')
+                  return (
+                    <div
+                      key={doc.id}
+                      className={`flex items-center justify-between p-3 rounded-md border ${
+                        presente ? 'bg-background' : 'bg-destructive/10 border-destructive'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span aria-hidden>{presente ? '✅' : '❌'}</span>
+                        <div className="min-w-0">
+                          <p className="font-medium">{labelTipo}</p>
+                          {doc.numeroDocumento && (
+                            <p className="text-sm text-muted-foreground">N° {doc.numeroDocumento}</p>
+                          )}
+                          {!presente && (
+                            <p className="text-sm text-destructive">Sin archivo adjunto</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    {doc.presente && (
-                      <>
-                        <Button variant="ghost" size="sm">
-                          Ver
-                        </Button>
-                        {operacion.estadoFinanciero !== 'CERRADA' && (
-                          <Button variant="ghost" size="sm">
-                            Eliminar
-                          </Button>
-                        )}
-                      </>
-                    )}
-                    {!doc.presente && (
-                      <Button variant="outline" size="sm">
-                        Subir ahora
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  )
+                })
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -291,24 +335,26 @@ export default function OperacionDetallePage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Pagos</CardTitle>
               {operacion.estadoFinanciero !== 'CERRADA' && (
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" type="button">
                   <DollarSign className="h-4 w-4 mr-2" />
                   Registrar Pago
                 </Button>
               )}
             </CardHeader>
             <CardContent>
-              {operacion.pagos && operacion.pagos.length > 0 ? (
+              {pagos.length > 0 ? (
                 <div className="space-y-3">
-                  {operacion.pagos.map((pago: any) => (
+                  {pagos.map((pago: PagoOperacionApi) => (
                     <div key={pago.id} className="flex items-center justify-between p-3 rounded-md border">
                       <div>
-                        <p className="font-medium">{pago.tipo.replace('_', ' ')}</p>
+                        <p className="font-medium">{String(pago.tipo).replace(/_/g, ' ')}</p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(pago.fecha), 'dd/MM/yyyy')} • {pago.metodo}
+                          {format(new Date(pago.fechaPago), 'dd/MM/yyyy')} • {pago.metodoPago || '—'}
                         </p>
                       </div>
-                      <p className="font-semibold">${pago.monto.toLocaleString('es-CL')}</p>
+                      <p className="font-semibold">
+                        ${Number(pago.monto).toLocaleString('es-CL')}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -319,16 +365,29 @@ export default function OperacionDetallePage() {
           </Card>
         </TabsContent>
 
-        {operacion.tipo.startsWith('VENTA_') && (
+        {String(operacion.tipo).startsWith('VENTA_') && (
           <TabsContent value="factoring" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Factoring</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground text-center py-4">No hay factoring registrado</p>
-                {operacion.estadoFinanciero !== 'CERRADA' && (
-                  <Button variant="outline" className="w-full">
+                {operacion.factoring ? (
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="text-muted-foreground">Empresa:</span>{' '}
+                      {operacion.factoring.empresaFactoring}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Monto factura:</span>{' '}
+                      ${Number(operacion.factoring.montoFactura).toLocaleString('es-CL')}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">No hay factoring registrado</p>
+                )}
+                {operacion.estadoFinanciero !== 'CERRADA' && !operacion.factoring && (
+                  <Button variant="outline" className="w-full mt-4" type="button">
                     Registrar Factoring
                   </Button>
                 )}
@@ -338,23 +397,21 @@ export default function OperacionDetallePage() {
         )}
       </Tabs>
 
-      {/* Observaciones */}
       {operacion.observaciones && (
         <Card>
           <CardHeader>
             <CardTitle>Observaciones</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">{operacion.observaciones}</p>
+            <p className="text-sm whitespace-pre-wrap">{operacion.observaciones}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Cerrar Operación */}
       {operacion.estadoFinanciero !== 'CERRADA' && (
         <Card>
           <CardContent className="pt-6">
-            <Button variant="destructive" className="w-full">
+            <Button variant="destructive" className="w-full" type="button">
               <Lock className="h-4 w-4 mr-2" />
               Cerrar Operación
             </Button>
@@ -364,4 +421,3 @@ export default function OperacionDetallePage() {
     </div>
   )
 }
-

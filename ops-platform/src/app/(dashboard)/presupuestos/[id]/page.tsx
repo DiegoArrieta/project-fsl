@@ -3,7 +3,7 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Calculator, FileDown, CheckCircle2, Edit } from 'lucide-react'
+import { ArrowLeft, Loader2, FileDown, CheckCircle2, Edit } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,7 +57,7 @@ export default function PresupuestoDetallePage() {
     onSuccess: (response) => {
       toast.success('Presupuesto aceptado correctamente')
       queryClient.invalidateQueries({ queryKey: ['presupuesto', id] })
-      // Redirigir a la operación creada
+      queryClient.invalidateQueries({ queryKey: ['operaciones'] })
       router.push(`/operaciones/${response.data.operacionId}`)
     },
     onError: (error: Error) => {
