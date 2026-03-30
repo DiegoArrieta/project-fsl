@@ -34,8 +34,24 @@ export interface PagoOperacionApi {
 }
 
 export interface FactoringOperacionApi {
-  empresaFactoring?: string
+  id?: string
+  empresaFactoringId?: string
+  /** Catálogo (include en GET operación) */
+  empresaFactoring?: {
+    id: string
+    nombre: string
+    rut?: string | null
+    contacto?: string | null
+    telefono?: string | null
+    email?: string | null
+    activo?: boolean
+  } | null
+  fechaFactoring?: string
   montoFactura?: string | number | { toString: () => string }
+  montoAdelantado?: string | number | { toString: () => string }
+  comisionFactoring?: string | number | { toString: () => string } | null
+  fechaVencimiento?: string | null
+  observaciones?: string | null
 }
 
 export interface OperacionClienteApi {

@@ -50,7 +50,11 @@ export async function GET(
             fechaPago: 'desc',
           },
         },
-        factoring: true,
+        factoring: {
+          include: {
+            empresaFactoring: true,
+          },
+        },
         ordenCompraGenerada: true,
       },
     })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { createPagoSchema } from '@/lib/validations/pago'
 import {
@@ -18,10 +19,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const operacionId = searchParams.get('operacionId')
 
-    const where: any = {}
-    if (operacionId) {
-      where.operacionId = operacionId
-    }
+    const where: Prisma.PagoWhereInput = operacionId ? { operacionId } : {}
 
     const pagos = await prisma.pago.findMany({
       where,
@@ -69,6 +67,7 @@ export async function POST(request: NextRequest) {
       include: {
         lineas: true,
         pagos: true,
+        proveedores: { select: { id: true } },
       },
     })
 
@@ -80,10 +79,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar que el pago sea coherente con el tipo de operación
+    const tieneProveedor = (operacion.proveedores?.length ?? 0) > 0
     const validacion = validarPagoParaOperacion(
       operacion.tipo,
       validatedData.tipo,
-      !!operacion.proveedorId,
+      tieneProveedor,
       !!operacion.clienteId
     )
 

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generarTodasLasAlertas } from '@/lib/dashboard/alertas'
 import { obtenerDocumentosObligatorios, obtenerDocumentosFaltantes } from '@/lib/operaciones/documentos'
@@ -7,7 +7,7 @@ import { obtenerDocumentosObligatorios, obtenerDocumentosFaltantes } from '@/lib
  * GET /api/dashboard/alertas
  * Obtiene todas las alertas del sistema
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Obtener operaciones abiertas (no cerradas)
     const operaciones = await prisma.operacion.findMany({
@@ -23,9 +23,13 @@ export async function GET(_request: NextRequest) {
           },
         },
         documentos: true,
-        proveedor: {
-          select: {
-            razonSocial: true,
+        proveedores: {
+          include: {
+            proveedor: {
+              select: {
+                razonSocial: true,
+              },
+            },
           },
         },
         cliente: {

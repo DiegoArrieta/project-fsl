@@ -28,14 +28,18 @@ export async function GET(
         },
         operaciones: {
           take: 5,
-          orderBy: { fecha: 'desc' },
+          orderBy: { createdAt: 'desc' },
           select: {
-            id: true,
-            numero: true,
-            fecha: true,
-            tipo: true,
-            estadoDocumental: true,
-            estadoFinanciero: true,
+            operacion: {
+              select: {
+                id: true,
+                numero: true,
+                fecha: true,
+                tipo: true,
+                estadoDocumental: true,
+                estadoFinanciero: true,
+              },
+            },
           },
         },
       },
@@ -48,15 +52,18 @@ export async function GET(
       )
     }
 
-    // Calcular estadísticas
+    const ultimasOperaciones = proveedor.operaciones
+      .map((row) => row.operacion)
+      .filter(Boolean)
+
     const operacionesAbiertas = await prisma.operacion.count({
       where: {
-        proveedorId: id,
+        proveedores: { some: { proveedorId: id } },
         estadoFinanciero: { not: 'CERRADA' },
       },
     })
 
-    const ultimaOperacion = proveedor.operaciones[0]?.fecha || null
+    const ultimaFecha = ultimasOperaciones[0]?.fecha ?? null
 
     return NextResponse.json({
       success: true,
@@ -76,9 +83,9 @@ export async function GET(
         estadisticas: {
           totalOperaciones: proveedor._count.operaciones,
           operacionesAbiertas,
-          ultimaOperacion: ultimaOperacion ? ultimaOperacion.toISOString().split('T')[0] : null,
+          ultimaOperacion: ultimaFecha ? ultimaFecha.toISOString().split('T')[0] : null,
         },
-        ultimasOperaciones: proveedor.operaciones,
+        ultimasOperaciones,
       },
     })
   } catch (error) {

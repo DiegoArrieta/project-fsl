@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +19,9 @@ import type {
   OperacionProveedorRowApi,
   PagoOperacionApi,
 } from '@/types/operacion-api'
+import { RegistrarPagoDialog } from '@/components/operaciones/RegistrarPagoDialog'
+import { RegistrarFactoringDialog } from '@/components/operaciones/RegistrarFactoringDialog'
+import { AdjuntarDocumentoDialog } from '@/components/operaciones/AdjuntarDocumentoDialog'
 
 async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
   const response = await fetch(`/api/operaciones/${id}`)
@@ -35,6 +39,10 @@ async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
 export default function OperacionDetallePage() {
   const params = useParams()
   const id = params.id as string
+  const queryClient = useQueryClient()
+  const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false)
+  const [factoringDialogOpen, setFactoringDialogOpen] = useState(false)
+  const [adjuntarDocumentoOpen, setAdjuntarDocumentoOpen] = useState(false)
 
   const {
     data: operacion,
@@ -82,6 +90,8 @@ export default function OperacionDetallePage() {
   const lineas = operacion.lineas || []
   const documentos = operacion.documentos || []
   const pagos = operacion.pagos || []
+  const tieneCliente = Boolean(operacion.cliente)
+  const tieneProveedor = (operacion.proveedores?.length ?? 0) > 0
   const totales = calcularTotalesDesdeLineas(operacion.tipo, lineas)
   const docsPresentes = documentos.filter((d: DocumentoOperacionApi) => isDocumentoPresente(d)).length
 
@@ -290,8 +300,13 @@ export default function OperacionDetallePage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Documentos</CardTitle>
               {operacion.estadoFinanciero !== 'CERRADA' && (
-                <Button variant="outline" size="sm" type="button">
-                  <FileText className="h-4 w-4 mr-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => setAdjuntarDocumentoOpen(true)}
+                >
+                  <FileText className="h-4 w-4 mr-2" aria-hidden />
                   Adjuntar
                 </Button>
               )}
@@ -335,9 +350,14 @@ export default function OperacionDetallePage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Pagos</CardTitle>
               {operacion.estadoFinanciero !== 'CERRADA' && (
-                <Button variant="outline" size="sm" type="button">
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Registrar Pago
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => setRegistrarPagoOpen(true)}
+                >
+                  <DollarSign className="h-4 w-4 mr-2" aria-hidden />
+                  Registrar pago
                 </Button>
               )}
             </CardHeader>
@@ -365,34 +385,102 @@ export default function OperacionDetallePage() {
           </Card>
         </TabsContent>
 
+        <RegistrarPagoDialog
+          operacionId={operacion.id}
+          tipoOperacion={operacion.tipo}
+          tieneCliente={tieneCliente}
+          tieneProveedor={tieneProveedor}
+          open={registrarPagoOpen}
+          onOpenChange={setRegistrarPagoOpen}
+          onRegistered={() => {
+            queryClient.invalidateQueries({ queryKey: ['operacion', id] })
+          }}
+        />
+
+        <AdjuntarDocumentoDialog
+          operacionId={operacion.id}
+          open={adjuntarDocumentoOpen}
+          onOpenChange={setAdjuntarDocumentoOpen}
+          onGuardado={() => {
+            queryClient.invalidateQueries({ queryKey: ['operacion', id] })
+          }}
+        />
+
         {String(operacion.tipo).startsWith('VENTA_') && (
           <TabsContent value="factoring" className="space-y-4">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Factoring</CardTitle>
+                {operacion.estadoFinanciero !== 'CERRADA' && operacion.factoring && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setFactoringDialogOpen(true)}>
+                    Editar
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 {operacion.factoring ? (
                   <div className="space-y-2 text-sm">
                     <p>
                       <span className="text-muted-foreground">Empresa:</span>{' '}
-                      {operacion.factoring.empresaFactoring}
+                      {operacion.factoring.empresaFactoring?.nombre ?? '—'}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Fecha:</span>{' '}
+                      {operacion.factoring.fechaFactoring
+                        ? format(new Date(operacion.factoring.fechaFactoring), 'dd/MM/yyyy')
+                        : '—'}
                     </p>
                     <p>
                       <span className="text-muted-foreground">Monto factura:</span>{' '}
                       ${Number(operacion.factoring.montoFactura).toLocaleString('es-CL')}
                     </p>
+                    <p>
+                      <span className="text-muted-foreground">Monto adelantado:</span>{' '}
+                      ${Number(operacion.factoring.montoAdelantado ?? 0).toLocaleString('es-CL')}
+                    </p>
+                    {operacion.factoring.comisionFactoring != null && (
+                      <p>
+                        <span className="text-muted-foreground">Comisión:</span>{' '}
+                        ${Number(operacion.factoring.comisionFactoring).toLocaleString('es-CL')}
+                      </p>
+                    )}
+                    {operacion.factoring.fechaVencimiento && (
+                      <p>
+                        <span className="text-muted-foreground">Vencimiento:</span>{' '}
+                        {format(new Date(operacion.factoring.fechaVencimiento), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                    {operacion.factoring.observaciones && (
+                      <p className="whitespace-pre-wrap pt-2 border-t">
+                        <span className="text-muted-foreground">Obs.:</span> {operacion.factoring.observaciones}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">No hay factoring registrado</p>
                 )}
                 {operacion.estadoFinanciero !== 'CERRADA' && !operacion.factoring && (
-                  <Button variant="outline" className="w-full mt-4" type="button">
-                    Registrar Factoring
+                  <Button
+                    variant="outline"
+                    className="w-full mt-4"
+                    type="button"
+                    onClick={() => setFactoringDialogOpen(true)}
+                  >
+                    Registrar factoring
                   </Button>
                 )}
               </CardContent>
             </Card>
+
+            <RegistrarFactoringDialog
+              operacionId={id}
+              factoring={operacion.factoring ?? null}
+              open={factoringDialogOpen}
+              onOpenChange={setFactoringDialogOpen}
+              onSaved={() => {
+                queryClient.invalidateQueries({ queryKey: ['operacion', id] })
+              }}
+            />
           </TabsContent>
         )}
       </Tabs>

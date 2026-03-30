@@ -99,7 +99,7 @@ export function ContactoCard({
         {/* Acciones */}
         <div className="flex gap-2 pt-2 border-t">
           <Button variant="outline" size="sm" asChild className="flex-1 hover:bg-accent hover:text-accent-foreground">
-            <Link href={`/contactos/${id}`}>
+            <Link href={`/contactos/${id}?tipo=${_tipo}`}>
               <Edit className="h-3.5 w-3.5 mr-1.5" />
               Editar
             </Link>
@@ -110,7 +110,7 @@ export function ContactoCard({
             asChild
             className="flex-1 group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
           >
-            <Link href={`/contactos/${id}`} className="flex items-center justify-center gap-1">
+            <Link href={`/contactos/${id}?tipo=${_tipo}`} className="flex items-center justify-center gap-1">
               Ver detalles
               <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
             </Link>

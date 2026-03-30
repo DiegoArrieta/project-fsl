@@ -103,9 +103,11 @@ model Proveedor {
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
   empresaId      String?              @map("empresa_id") @db.Uuid
-  operaciones    OperacionProveedor[]
-  ordenesCompra  OrdenCompra[]
-  empresa        Empresa?             @relation(fields: [empresaId], references: [id])
+  operaciones       OperacionProveedor[]
+  ordenesCompra     OrdenCompra[]
+  empresa                  Empresa?               @relation(fields: [empresaId], references: [id])
+  personasContacto         ContactoPersona[]
+  solicitudesCotizacion    SolicitudCotizacion[]
 
   @@index([activo])
   @@index([empresaId])
@@ -140,13 +142,35 @@ model Cliente {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
   empresaId      String?       @map("empresa_id") @db.Uuid
-  empresa        Empresa?      @relation(fields: [empresaId], references: [id])
-  operaciones    Operacion[]
-  presupuestos   Presupuesto[]
+  empresa            Empresa?          @relation(fields: [empresaId], references: [id])
+  operaciones        Operacion[]
+  presupuestos       Presupuesto[]
+  personasContacto   ContactoPersona[]
 
   @@index([activo])
   @@index([empresaId])
   @@map("cliente")
+}
+
+/// Persona de contacto asociada a un proveedor o a un cliente (uno u otro, nunca ambos)
+model ContactoPersona {
+  id           String     @id @default(uuid()) @db.Uuid
+  proveedorId  String?    @map("proveedor_id") @db.Uuid
+  clienteId    String?    @map("cliente_id") @db.Uuid
+  nombre       String     @db.VarChar(255)
+  cargo        String?    @db.VarChar(150)
+  email        String?    @db.VarChar(255)
+  telefono     String?    @db.VarChar(30)
+  esPrincipal  Boolean    @default(false) @map("es_principal")
+  notas        String?    @db.Text
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+  proveedor    Proveedor? @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  cliente      Cliente?   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([proveedorId])
+  @@index([clienteId])
+  @@map("contacto_persona")
 }
 
 model TipoPallet {
@@ -159,7 +183,8 @@ model TipoPallet {
   createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   operacionLineas       OperacionLinea[]
   ordenCompraLineas     OrdenCompraLinea[]
-  presupuestoLineas     PresupuestoLinea[]
+  presupuestoLineas           PresupuestoLinea[]
+  solicitudCotizacionLineas   SolicitudCotizacionLinea[]
 
   @@map("tipo_pallet")
 }
@@ -274,20 +299,41 @@ model Pago {
   @@map("pago")
 }
 
-model Factoring {
-  id                String    @id @default(uuid()) @db.Uuid
-  operacionId       String    @unique @map("operacion_id") @db.Uuid
-  empresaFactoring  String    @map("empresa_factoring") @db.VarChar(255)
-  fechaFactoring    DateTime  @map("fecha_factoring") @db.Date
-  montoFactura      Decimal   @map("monto_factura") @db.Decimal(12, 2)
-  montoAdelantado   Decimal   @map("monto_adelantado") @db.Decimal(12, 2)
-  comisionFactoring Decimal?  @map("comision_factoring") @db.Decimal(12, 2)
-  fechaVencimiento  DateTime? @map("fecha_vencimiento") @db.Date
-  observaciones     String?
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  operacion         Operacion @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+/// Empresa de factoring (catálogo para operaciones de venta)
+model EmpresaFactoring {
+  id        String    @id @default(uuid()) @db.Uuid
+  nombre    String    @db.VarChar(255)
+  rut       String?   @db.VarChar(12)
+  contacto  String?   @db.VarChar(255)
+  telefono  String?   @db.VarChar(20)
+  email     String?   @db.VarChar(255)
+  activo    Boolean   @default(true)
+  notas     String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  @@index([empresaFactoring])
+  registrosFactoring Factoring[]
+
+  @@index([activo])
+  @@index([nombre])
+  @@map("empresa_factoring")
+}
+
+model Factoring {
+  id                 String           @id @default(uuid()) @db.Uuid
+  operacionId        String           @unique @map("operacion_id") @db.Uuid
+  empresaFactoringId String           @map("empresa_factoring_id") @db.Uuid
+  fechaFactoring     DateTime         @map("fecha_factoring") @db.Date
+  montoFactura       Decimal          @map("monto_factura") @db.Decimal(12, 2)
+  montoAdelantado    Decimal          @map("monto_adelantado") @db.Decimal(12, 2)
+  comisionFactoring  Decimal?         @map("comision_factoring") @db.Decimal(12, 2)
+  fechaVencimiento   DateTime?        @map("fecha_vencimiento") @db.Date
+  observaciones      String?
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+  operacion          Operacion        @relation(fields: [operacionId], references: [id], onDelete: Cascade)
+  empresaFactoring   EmpresaFactoring @relation(fields: [empresaFactoringId], references: [id], onDelete: Restrict)
+
+  @@index([empresaFactoringId])
   @@index([fechaVencimiento])
   @@map("factoring")
 }
@@ -463,6 +509,43 @@ model PresupuestoLinea {
   @@map("presupuesto_linea")
 }
 
+/// Solicitud de cotización a un proveedor (solo cantidades por línea; sin operación asociada por ahora)
+model SolicitudCotizacion {
+  id            String                    @id @default(uuid()) @db.Uuid
+  numero        String                    @unique @db.VarChar(20)
+  proveedorId   String                    @map("proveedor_id") @db.Uuid
+  fecha         DateTime                  @db.Date
+  observaciones String?                   @db.Text
+  estado        EstadoSolicitudCotizacion @default(BORRADOR)
+  createdAt     DateTime                  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime                  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  proveedor Proveedor                  @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  lineas    SolicitudCotizacionLinea[]
+
+  @@index([proveedorId])
+  @@index([fecha(sort: Desc)])
+  @@index([estado])
+  @@map("solicitud_cotizacion")
+}
+
+model SolicitudCotizacionLinea {
+  id                    String @id @default(uuid()) @db.Uuid
+  solicitudCotizacionId String @map("solicitud_cotizacion_id") @db.Uuid
+  tipoPalletId          String @map("tipo_pallet_id") @db.Uuid
+  cantidad              Int
+  descripcion           String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  solicitud  SolicitudCotizacion @relation(fields: [solicitudCotizacionId], references: [id], onDelete: Cascade)
+  tipoPallet TipoPallet          @relation(fields: [tipoPalletId], references: [id])
+
+  @@index([solicitudCotizacionId])
+  @@index([tipoPalletId])
+  @@map("solicitud_cotizacion_linea")
+}
+
 model DocumentSequence {
   id        String        @id @default(uuid()) @db.Uuid
   tipo      TipoSecuencia
@@ -485,4 +568,11 @@ enum TipoSecuencia {
   PRESUPUESTO
   OPERACION
   ORDEN_COMPRA
+  SOLICITUD_COTIZACION
+}
+
+enum EstadoSolicitudCotizacion {
+  BORRADOR
+  ENVIADO
+  CERRADO
 }

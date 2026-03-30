@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import Link from 'next/link'
+import { signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { LogOut, User, Settings } from 'lucide-react'
 import {
@@ -17,7 +18,9 @@ export function Header() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    startTransition(() => {
+      setMounted(true)
+    })
   }, [])
 
   return (
@@ -57,9 +60,14 @@ export function Header() {
                   <span>Configuración</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span className="font-medium">Cerrar Sesión</span>
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 focus:text-red-600"
+                  onSelect={() => {
+                    void signOut({ callbackUrl: '/login' })
+                  }}
+                >
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden />
+                  <span className="font-medium">Cerrar sesión</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, startTransition } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,7 +38,10 @@ async function fetchOperacionesPage(searchParams: URLSearchParams): Promise<{
 }
 
 export default function OperacionesPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [page, setPage] = useState(1)
+  const [cerradasDesdeDias, setCerradasDesdeDias] = useState<string | null>(null)
   const [filtros, setFiltros] = useState({
     buscar: '',
     tipo: 'TODAS',
@@ -45,16 +49,39 @@ export default function OperacionesPage() {
     estadoFin: 'TODOS',
   })
 
+  const searchParamsKey = searchParams.toString()
+
+  useEffect(() => {
+    const buscar = searchParams.get('buscar') ?? ''
+    const tipo = searchParams.get('tipo') ?? 'TODAS'
+    const estadoDoc = searchParams.get('estadoDocumental') ?? 'TODOS'
+    const cerradas = searchParams.get('cerradasDesdeDias')
+    let estadoFin = searchParams.get('estadoFinanciero') ?? 'TODOS'
+    if (cerradas) {
+      estadoFin = 'CERRADA'
+    }
+    startTransition(() => {
+      setFiltros({ buscar, tipo, estadoDoc, estadoFin })
+      setCerradasDesdeDias(cerradas)
+      setPage(1)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `searchParamsKey` refleja cambios de la URL
+  }, [searchParamsKey])
+
   const queryParams = new URLSearchParams()
   queryParams.set('page', String(page))
   queryParams.set('pageSize', String(PAGE_SIZE))
   if (filtros.buscar.trim()) queryParams.set('buscar', filtros.buscar.trim())
   if (filtros.tipo !== 'TODAS') queryParams.set('tipo', filtros.tipo)
   if (filtros.estadoDoc !== 'TODOS') queryParams.set('estadoDocumental', filtros.estadoDoc)
-  if (filtros.estadoFin !== 'TODOS') queryParams.set('estadoFinanciero', filtros.estadoFin)
+  if (cerradasDesdeDias) {
+    queryParams.set('cerradasDesdeDias', cerradasDesdeDias)
+  } else if (filtros.estadoFin !== 'TODOS') {
+    queryParams.set('estadoFinanciero', filtros.estadoFin)
+  }
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ['operaciones', filtros, page],
+    queryKey: ['operaciones', filtros, page, cerradasDesdeDias],
     queryFn: () => fetchOperacionesPage(queryParams),
   })
 
@@ -63,7 +90,9 @@ export default function OperacionesPage() {
 
   const handleLimpiar = () => {
     setFiltros({ buscar: '', tipo: 'TODAS', estadoDoc: 'TODOS', estadoFin: 'TODOS' })
+    setCerradasDesdeDias(null)
     setPage(1)
+    router.replace('/operaciones')
   }
 
   const getEstadoDocBadge = (estado: string, docs: DocumentoOperacionApi[]) => {
@@ -198,6 +227,7 @@ export default function OperacionesPage() {
               value={filtros.estadoFin}
               onValueChange={(v) => {
                 setFiltros({ ...filtros, estadoFin: v })
+                setCerradasDesdeDias(null)
                 setPage(1)
               }}
             >
@@ -206,6 +236,7 @@ export default function OperacionesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="TODOS">Todos (financiero)</SelectItem>
+                <SelectItem value="ABIERTAS">Abiertas (no cerradas)</SelectItem>
                 <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                 <SelectItem value="FACTURADA">Facturada</SelectItem>
                 <SelectItem value="PAGADA">Pagada</SelectItem>

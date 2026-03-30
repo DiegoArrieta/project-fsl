@@ -17,9 +17,14 @@ export async function GET(request: NextRequest) {
         createdAt: 'desc',
       },
       include: {
-        proveedor: {
-          select: {
-            razonSocial: true,
+        proveedores: {
+          take: 1,
+          include: {
+            proveedor: {
+              select: {
+                razonSocial: true,
+              },
+            },
           },
         },
         cliente: {
@@ -69,7 +74,7 @@ export async function GET(request: NextRequest) {
         descripcion: `Nueva operación ${op.numero}`,
         entidad:
           op.tipo === 'COMPRA'
-            ? op.proveedor?.razonSocial || 'Sin proveedor'
+            ? op.proveedores[0]?.proveedor?.razonSocial || 'Sin proveedor'
             : op.cliente?.razonSocial || 'Sin cliente',
         enlace: `/operaciones/${op.id}`,
       })),

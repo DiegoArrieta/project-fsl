@@ -1,24 +1,49 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { mockOrdenesCompra } from '@/lib/mocks'
-import { Plus, Search, RefreshCw, Download, ChevronRight, FileText, Building2, Package, Calendar } from 'lucide-react'
+import { Plus, Search, RefreshCw, Download, ChevronRight, FileText, Building2, Package, Calendar, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { mapOrdenCompraApiToUi, type OrdenCompraUi } from '@/lib/ordenes-compra/ui-map'
+
+async function fetchOrdenesCompra(filtros: { buscar: string; estado: string }): Promise<OrdenCompraUi[]> {
+  const params = new URLSearchParams()
+  if (filtros.buscar.trim()) params.set('buscar', filtros.buscar.trim())
+  if (filtros.estado !== 'TODOS') params.set('estado', filtros.estado)
+  const qs = params.toString()
+  const response = await fetch(`/api/ordenes-compra${qs ? `?${qs}` : ''}`)
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'Error al cargar órdenes de compra')
+  }
+  const json = await response.json()
+  const raw = json.data as Parameters<typeof mapOrdenCompraApiToUi>[0][]
+  return (raw ?? []).map((row) => mapOrdenCompraApiToUi(row))
+}
 
 export default function OrdenesCompraPage() {
-  const [ordenes] = useState(mockOrdenesCompra)
   const [filtros, setFiltros] = useState({
     buscar: '',
     estado: 'TODOS',
   })
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
+
+  const {
+    data: ordenes = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['ordenes-compra', filtros.buscar, filtros.estado],
+    queryFn: () => fetchOrdenesCompra(filtros),
+  })
 
   const handleDescargarPDF = async (id: string, numero: string) => {
     try {
@@ -28,8 +53,8 @@ export default function OrdenesCompraPage() {
       const response = await fetch(`/api/ordenes-compra/${id}/descargar-pdf`)
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Error al descargar PDF')
+        const errBody = await response.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Error al descargar PDF')
       }
 
       const blob = await response.blob()
@@ -43,9 +68,10 @@ export default function OrdenesCompraPage() {
       document.body.removeChild(a)
 
       toast.success('PDF descargado correctamente', { id: `download-${id}` })
-    } catch (error: any) {
-      console.error('Error al descargar PDF:', error)
-      toast.error(error.message || 'Error al descargar PDF', { id: `download-${id}` })
+    } catch (e: unknown) {
+      console.error('Error al descargar PDF:', e)
+      const message = e instanceof Error ? e.message : 'Error al descargar PDF'
+      toast.error(message, { id: `download-${id}` })
     } finally {
       setDownloadingIds((prev) => {
         const next = new Set(prev)
@@ -87,6 +113,17 @@ export default function OrdenesCompraPage() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <p className="text-destructive text-sm">{(error as Error).message}</p>
+        <Button type="button" variant="outline" onClick={() => refetch()}>
+          Reintentar
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -116,7 +153,7 @@ export default function OrdenesCompraPage() {
                 className="pl-10"
               />
             </div>
-            <Button variant="outline" onClick={() => setFiltros({ buscar: '', estado: 'TODOS' })}>
+            <Button variant="outline" type="button" onClick={() => setFiltros({ buscar: '', estado: 'TODOS' })}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Limpiar filtros
             </Button>
@@ -128,7 +165,16 @@ export default function OrdenesCompraPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground font-medium">
-            Mostrando <span className="font-bold text-foreground">{ordenes.length}</span> órdenes de compra
+            {isLoading ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Cargando…
+              </span>
+            ) : (
+              <>
+                Mostrando <span className="font-bold text-foreground">{ordenes.length}</span> órdenes de compra
+              </>
+            )}
           </p>
         </div>
 
@@ -146,7 +192,7 @@ export default function OrdenesCompraPage() {
                       <span className="font-bold text-xl text-primary">{oc.numero}</span>
                       {getEstadoBadge(oc.estado)}
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground font-medium">
-                        <Calendar className="h-4 w-4" />
+                        <Calendar className="h-4 w-4" aria-hidden />
                         {format(new Date(oc.fecha), "d 'de' MMM yyyy", { locale: es })}
                       </div>
                     </div>
@@ -154,7 +200,7 @@ export default function OrdenesCompraPage() {
                     {/* Proveedor */}
                     {oc.proveedor && (
                       <div className="flex items-start gap-2 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/50">
-                        <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                        <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" aria-hidden />
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                             Proveedor
@@ -167,7 +213,7 @@ export default function OrdenesCompraPage() {
                     {/* Totales y productos */}
                     <div className="flex items-center gap-4 flex-wrap">
                       <div className="flex items-center gap-2 px-4 py-2 bg-accent rounded-lg border border-border">
-                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <Package className="h-4 w-4 text-muted-foreground" aria-hidden />
                         <span className="text-sm font-semibold">{oc.productos.length} producto(s)</span>
                       </div>
                       <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-lg border border-primary/20">
@@ -182,11 +228,12 @@ export default function OrdenesCompraPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      type="button"
                       onClick={() => handleDescargarPDF(oc.id, oc.numero)}
                       disabled={downloadingIds.has(oc.id)}
                       className="hover:bg-primary hover:text-primary-foreground transition-colors"
                     >
-                      <Download className="h-4 w-4 mr-2" />
+                      <Download className="h-4 w-4 mr-2" aria-hidden />
                       {downloadingIds.has(oc.id) ? 'Generando...' : 'Descargar PDF'}
                     </Button>
                     <Button
@@ -197,7 +244,7 @@ export default function OrdenesCompraPage() {
                     >
                       <Link href={`/ordenes-compra/${oc.id}`} className="flex items-center gap-2">
                         Ver detalles
-                        <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" aria-hidden />
                       </Link>
                     </Button>
                   </div>
@@ -207,14 +254,14 @@ export default function OrdenesCompraPage() {
           ))}
         </div>
 
-        {ordenes.length === 0 && (
+        {!isLoading && ordenes.length === 0 && (
           <Card className="shadow-lg border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-4">
-              <FileText className="h-16 w-16 text-muted-foreground opacity-50" />
+              <FileText className="h-16 w-16 text-muted-foreground opacity-50" aria-hidden />
               <div className="space-y-2">
                 <h3 className="text-xl font-semibold">No hay órdenes de compra</h3>
                 <p className="text-muted-foreground max-w-md">
-                  Aún no tienes órdenes de compra registradas. Comienza creando tu primera orden.
+                  No hay resultados con los filtros actuales o aún no existen órdenes en el sistema.
                 </p>
               </div>
               <Button asChild size="lg" className="mt-4">

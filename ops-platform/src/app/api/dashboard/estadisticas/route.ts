@@ -36,18 +36,36 @@ export async function GET(request: NextRequest) {
         fechaInicio = new Date(now.getFullYear(), now.getMonth(), 1)
     }
 
-    // Obtener operaciones del periodo
-    const operaciones = await prisma.operacion.findMany({
-      where: {
-        fecha: {
-          gte: fechaInicio,
+    const hace30Dias = new Date(now)
+    hace30Dias.setDate(hace30Dias.getDate() - 30)
+
+    const [operaciones, operacionesAbiertas, cerradas30Dias] = await Promise.all([
+      prisma.operacion.findMany({
+        where: {
+          fecha: {
+            gte: fechaInicio,
+          },
         },
-      },
-      include: {
-        lineas: true,
-        pagos: true,
-      },
-    })
+        include: {
+          lineas: true,
+          pagos: true,
+        },
+      }),
+      prisma.operacion.count({
+        where: { estadoFinanciero: { not: 'CERRADA' } },
+      }),
+      prisma.operacion.count({
+        where: {
+          estadoFinanciero: 'CERRADA',
+          OR: [
+            { fechaCierre: { gte: hace30Dias } },
+            {
+              AND: [{ fechaCierre: null }, { updatedAt: { gte: hace30Dias } }],
+            },
+          ],
+        },
+      }),
+    ])
 
     // Calcular estadísticas
     const estadisticasOperaciones = calcularEstadisticasOperaciones(operaciones)
@@ -63,6 +81,10 @@ export async function GET(request: NextRequest) {
         estadisticasOperaciones,
         metricasFinancieras,
         operacionesPendientes,
+        resumenGlobal: {
+          operacionesAbiertas,
+          cerradas30Dias,
+        },
       },
     })
   } catch (error) {

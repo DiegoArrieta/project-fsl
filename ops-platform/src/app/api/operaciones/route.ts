@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { createOperacionSchema } from '@/lib/validations/operacion'
@@ -16,14 +17,18 @@ export async function GET(request: NextRequest) {
     const tipo = searchParams.get('tipo')
     const estadoDocumental = searchParams.get('estadoDocumental')
     const estadoFinanciero = searchParams.get('estadoFinanciero')
+    const cerradasDesdeDiasRaw = searchParams.get('cerradasDesdeDias')
+    const cerradasDesdeDias = cerradasDesdeDiasRaw ? parseInt(cerradasDesdeDiasRaw, 10) : NaN
     const buscar = searchParams.get('buscar')
     const clienteId = searchParams.get('clienteId')
     const proveedorId = searchParams.get('proveedorId')
 
-    // Construir filtros
-    const where: any = {}
+    // Construir filtros (query string → condiciones Prisma; tipos laxos por strings de URL)
+    const where: Record<string, unknown> = {}
 
-    if (tipo && tipo !== 'TODAS') {
+    if (tipo === 'VENTAS') {
+      where.tipo = { in: ['VENTA_DIRECTA', 'VENTA_COMISION'] }
+    } else if (tipo && tipo !== 'TODAS') {
       where.tipo = tipo
     }
 
@@ -31,7 +36,21 @@ export async function GET(request: NextRequest) {
       where.estadoDocumental = estadoDocumental
     }
 
-    if (estadoFinanciero && estadoFinanciero !== 'TODOS') {
+    if (!Number.isNaN(cerradasDesdeDias) && cerradasDesdeDias > 0) {
+      const desde = new Date()
+      desde.setDate(desde.getDate() - cerradasDesdeDias)
+      where.estadoFinanciero = 'CERRADA'
+      where.AND = [
+        {
+          OR: [
+            { fechaCierre: { gte: desde } },
+            { AND: [{ fechaCierre: null }, { updatedAt: { gte: desde } }] },
+          ],
+        },
+      ]
+    } else if (estadoFinanciero === 'ABIERTAS') {
+      where.estadoFinanciero = { not: 'CERRADA' }
+    } else if (estadoFinanciero && estadoFinanciero !== 'TODOS') {
       where.estadoFinanciero = estadoFinanciero
     }
 
@@ -54,12 +73,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const whereInput = where as Prisma.OperacionWhereInput
+
     // Contar total
-    const total = await prisma.operacion.count({ where })
+    const total = await prisma.operacion.count({ where: whereInput })
 
     // Obtener operaciones con relaciones
     const operaciones = await prisma.operacion.findMany({
-      where,
+      where: whereInput,
       include: {
         cliente: true,
         evento: {
@@ -133,7 +154,7 @@ export async function POST(request: NextRequest) {
     const totales = calcularTotalesOperacion(validatedData.tipo, validatedData.productos)
 
     // Preparar datos para crear
-    const operacionData: any = {
+    const operacionData: Record<string, unknown> = {
       numero,
       tipo: validatedData.tipo,
       fecha: new Date(validatedData.fecha),
@@ -158,11 +179,16 @@ export async function POST(request: NextRequest) {
     if (validatedData.tipo === 'COMPRA') {
       operacionData.totalCompra = totales.totalCompra
     } else {
-      const totalesVenta = totales as any
+      const totalesVenta = totales as {
+        totalVenta: number
+        totalCompra: number
+        margenBruto: number
+        porcentajeMargen: number
+      }
       operacionData.totalVenta = totalesVenta.totalVenta
       operacionData.totalCompra = totalesVenta.totalCompra
       operacionData.margenBruto = totalesVenta.margenBruto
-      operacionData.margenPorcentual = totalesVenta.margenPorcentual
+      operacionData.margenPorcentual = totalesVenta.porcentajeMargen
     }
 
     // Crear operación con productos y proveedores

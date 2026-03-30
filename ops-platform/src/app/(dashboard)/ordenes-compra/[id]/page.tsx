@@ -1,33 +1,49 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { mockOrdenesCompra } from '@/lib/mocks'
-import { ArrowLeft, Edit, Trash2, Download, CheckCircle2, XCircle } from 'lucide-react'
+import { ArrowLeft, Edit, Trash2, Download, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
 import { toast } from 'sonner'
+import { mapOrdenCompraApiToUi, type OrdenCompraUi } from '@/lib/ordenes-compra/ui-map'
+
+async function fetchOrdenCompraById(id: string): Promise<OrdenCompraUi | null> {
+  const response = await fetch(`/api/ordenes-compra/${id}`)
+  if (response.status === 404) {
+    return null
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'Error al cargar la orden de compra')
+  }
+  const json = await response.json()
+  return mapOrdenCompraApiToUi(json.data)
+}
 
 export default function OrdenCompraDetallePage() {
   const params = useParams()
   const id = params.id as string
-  const [oc, setOc] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [isDownloading, setIsDownloading] = useState(false)
 
-  useEffect(() => {
-    const orden = mockOrdenesCompra.find((o) => o.id === id)
-    if (orden) {
-      setOc(orden)
-      setLoading(false)
-    }
-  }, [id])
+  const {
+    data: oc,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['orden-compra', id],
+    queryFn: () => fetchOrdenCompraById(id),
+    enabled: Boolean(id),
+  })
 
   const handleDescargarPDF = async () => {
+    if (!oc) return
     try {
       setIsDownloading(true)
       toast.loading('Generando PDF...', { id: 'download-pdf' })
@@ -35,8 +51,8 @@ export default function OrdenCompraDetallePage() {
       const response = await fetch(`/api/ordenes-compra/${id}/descargar-pdf`)
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Error al descargar PDF')
+        const errBody = await response.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Error al descargar PDF')
       }
 
       const blob = await response.blob()
@@ -50,18 +66,32 @@ export default function OrdenCompraDetallePage() {
       document.body.removeChild(a)
 
       toast.success('PDF descargado correctamente', { id: 'download-pdf' })
-    } catch (error: any) {
-      console.error('Error al descargar PDF:', error)
-      toast.error(error.message || 'Error al descargar PDF', { id: 'download-pdf' })
+      queryClient.invalidateQueries({ queryKey: ['orden-compra', id] })
+    } catch (e: unknown) {
+      console.error('Error al descargar PDF:', e)
+      const message = e instanceof Error ? e.message : 'Error al descargar PDF'
+      toast.error(message, { id: 'download-pdf' })
     } finally {
       setIsDownloading(false)
     }
   }
 
-  if (loading) {
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center gap-4 min-h-[240px]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+        <p className="text-muted-foreground">Cargando orden de compra…</p>
+      </div>
+    )
+  }
+
+  if (error) {
     return (
       <div className="container mx-auto py-8">
-        <div className="text-center">Cargando...</div>
+        <p className="text-center text-destructive text-sm">{(error as Error).message}</p>
+        <Button asChild className="mt-4 block mx-auto">
+          <Link href="/ordenes-compra">Volver a Órdenes de Compra</Link>
+        </Button>
       </div>
     )
   }
@@ -95,25 +125,23 @@ export default function OrdenCompraDetallePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/ordenes-compra">
+            <Link href="/ordenes-compra" aria-label="Volver al listado">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{oc.numero}</h1>
-            <p className="text-muted-foreground mt-2">
-              Fecha: {format(new Date(oc.fecha), 'dd/MM/yyyy')}
-            </p>
+            <p className="text-muted-foreground mt-2">Fecha: {format(new Date(oc.fecha), 'dd/MM/yyyy')}</p>
           </div>
         </div>
         <div className="flex gap-2">
           {oc.estado === 'BORRADOR' && (
             <>
-              <Button variant="outline">
+              <Button variant="outline" type="button">
                 <Edit className="h-4 w-4 mr-2" />
                 Editar
               </Button>
-              <Button variant="destructive" size="icon">
+              <Button variant="destructive" size="icon" type="button" aria-label="Eliminar borrador">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </>
@@ -132,14 +160,18 @@ export default function OrdenCompraDetallePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="text-sm text-muted-foreground">Proveedor:</span>
-                <p className="font-medium">
-                  {oc.proveedor.razonSocial} ({formatRutForDisplay(oc.proveedor.rut)})
-                </p>
+                {oc.proveedor ? (
+                  <p className="font-medium">
+                    {oc.proveedor.razonSocial} ({formatRutForDisplay(oc.proveedor.rut)})
+                  </p>
+                ) : (
+                  <p className="font-medium text-muted-foreground">—</p>
+                )}
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">Fecha Entrega:</span>
                 <p className="font-medium">
-                  {oc.fechaEntregaEsperada ? format(new Date(oc.fechaEntregaEsperada), 'dd/MM/yyyy') : '-'}
+                  {oc.fechaEntregaEsperada ? format(new Date(oc.fechaEntregaEsperada), 'dd/MM/yyyy') : '—'}
                 </p>
               </div>
               {oc.direccionEntrega && (
@@ -170,8 +202,8 @@ export default function OrdenCompraDetallePage() {
                 </tr>
               </thead>
               <tbody>
-                {oc.productos.map((producto: any, idx: number) => (
-                  <tr key={idx} className="border-b">
+                {oc.productos.map((producto, idx) => (
+                  <tr key={`${producto.tipo}-${idx}`} className="border-b">
                     <td className="p-2">{producto.tipo}</td>
                     <td className="p-2">{producto.cantidad}</td>
                     <td className="p-2">${producto.precioUnitario.toLocaleString('es-CL')}</td>
@@ -197,7 +229,7 @@ export default function OrdenCompraDetallePage() {
             <CardTitle>Observaciones</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">{oc.observaciones}</p>
+            <p className="text-sm whitespace-pre-wrap">{oc.observaciones}</p>
           </CardContent>
         </Card>
       )}
@@ -208,21 +240,16 @@ export default function OrdenCompraDetallePage() {
           <CardTitle>Descargar Orden de Compra</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm text-muted-foreground">
-                {oc.pdfGenerado 
+                {oc.pdfGenerado
                   ? `PDF generado el ${format(new Date(oc.fecha), 'dd/MM/yyyy')}`
-                  : 'Descarga el PDF de esta orden de compra'
-                }
+                  : 'Descarga el PDF de esta orden de compra'}
               </p>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={handleDescargarPDF}
-              disabled={isDownloading}
-            >
-              <Download className="h-4 w-4 mr-2" />
+            <Button variant="outline" type="button" onClick={handleDescargarPDF} disabled={isDownloading}>
+              <Download className="h-4 w-4 mr-2" aria-hidden />
               {isDownloading ? 'Generando...' : 'Descargar PDF'}
             </Button>
           </div>
@@ -234,13 +261,13 @@ export default function OrdenCompraDetallePage() {
         <CardContent className="pt-6">
           <div className="flex gap-4">
             {oc.estado === 'ENVIADA' && (
-              <Button variant="outline" className="flex-1">
+              <Button variant="outline" className="flex-1" type="button">
                 <CheckCircle2 className="h-4 w-4 mr-2" />
                 Marcar como Recibida
               </Button>
             )}
             {oc.estado !== 'CANCELADA' && oc.estado !== 'RECIBIDA' && (
-              <Button variant="destructive" className="flex-1">
+              <Button variant="destructive" className="flex-1" type="button">
                 <XCircle className="h-4 w-4 mr-2" />
                 Cancelar OC
               </Button>
@@ -251,4 +278,3 @@ export default function OrdenCompraDetallePage() {
     </div>
   )
 }
-

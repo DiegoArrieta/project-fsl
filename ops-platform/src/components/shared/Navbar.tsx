@@ -2,15 +2,28 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, FileText, ShoppingCart, Users, BarChart3, Building2, Calendar, Calculator } from 'lucide-react'
+import {
+  LayoutDashboard,
+  FileText,
+  ShoppingCart,
+  Users,
+  BarChart3,
+  Building2,
+  Calendar,
+  Calculator,
+  ClipboardList,
+  Landmark,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/operaciones', label: 'Operaciones', icon: FileText },
   { href: '/presupuestos', label: 'Presupuestos', icon: Calculator },
+  { href: '/solicitudes-cotizacion', label: 'Solicitudes prov.', icon: ClipboardList },
   { href: '/ordenes-compra', label: 'Órdenes de Compra', icon: ShoppingCart },
   { href: '/empresas', label: 'Empresas', icon: Building2 },
+  { href: '/empresas-factoring', label: 'Emp. factoring', icon: Landmark },
   { href: '/eventos', label: 'Eventos', icon: Calendar },
   { href: '/contactos', label: 'Contactos', icon: Users },
   { href: '/reportes', label: 'Reportes', icon: BarChart3 },

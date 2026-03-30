@@ -9,8 +9,13 @@ interface Operacion {
   fecha: Date
   estadoDocumental: 'INCOMPLETA' | 'COMPLETA'
   estadoFinanciero: 'PENDIENTE' | 'FACTURADA' | 'PAGADA' | 'CERRADA'
-  proveedor?: { razonSocial: string } | null
+  /** Primer proveedor asociado (N:N en Prisma) */
+  proveedores?: { proveedor: { razonSocial: string } }[]
   cliente?: { razonSocial: string } | null
+}
+
+function razonSocialProveedorPrincipal(operacion: Operacion): string | undefined {
+  return operacion.proveedores?.[0]?.proveedor?.razonSocial
 }
 
 interface DocumentoFaltante {
@@ -95,7 +100,7 @@ export function generarAlertasPagosPendientes(operaciones: Operacion[]): Alerta[
 
       const entidad =
         operacion.tipo === 'COMPRA'
-          ? operacion.proveedor?.razonSocial || 'Proveedor'
+          ? razonSocialProveedorPrincipal(operacion) || 'Proveedor'
           : operacion.cliente?.razonSocial || 'Cliente'
 
       alertas.push({
@@ -135,7 +140,7 @@ export function generarAlertasFacturadasSinPagar(operaciones: Operacion[]): Aler
         tipo: 'FACTURADA_SIN_PAGAR',
         prioridad,
         titulo: `Falta pagar proveedor en ${operacion.numero}`,
-        descripcion: `Cliente pagó pero falta pagar a ${operacion.proveedor?.razonSocial || 'proveedor'}`,
+        descripcion: `Cliente pagó pero falta pagar a ${razonSocialProveedorPrincipal(operacion) || 'proveedor'}`,
         operacionId: operacion.id,
         operacionNumero: operacion.numero,
         fechaOperacion: operacion.fecha,
