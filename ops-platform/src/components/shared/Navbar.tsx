@@ -13,6 +13,7 @@ import {
   Calculator,
   ClipboardList,
   Landmark,
+  Package,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/ordenes-compra', label: 'Órdenes de Compra', icon: ShoppingCart },
   { href: '/empresas', label: 'Empresas', icon: Building2 },
   { href: '/empresas-factoring', label: 'Emp. factoring', icon: Landmark },
+  { href: '/tipos-pallet', label: 'Pallets', icon: Package },
   { href: '/eventos', label: 'Eventos', icon: Calendar },
   { href: '/contactos', label: 'Contactos', icon: Users },
   { href: '/reportes', label: 'Reportes', icon: BarChart3 },

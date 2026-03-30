@@ -242,7 +242,10 @@ function NuevaOperacionForm() {
                 <ProveedoresSelector
                   proveedores={mockProveedores}
                   proveedoresSeleccionados={formik.values.proveedores}
-                  onChange={(proveedores) => formik.setFieldValue('proveedores', proveedores)}
+                  onChange={(proveedores) => {
+                    void formik.setFieldValue('proveedores', proveedores, true)
+                    void formik.setFieldTouched('proveedores', true, false)
+                  }}
                   error={
                     formik.errors.proveedores && formik.touched.proveedores
                       ? String(formik.errors.proveedores)

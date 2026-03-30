@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { X, Plus } from 'lucide-react'
+import { X } from 'lucide-react'
 
 interface Proveedor {
   id: string
@@ -24,13 +24,15 @@ export function ProveedoresSelector({
   onChange,
   error,
 }: ProveedoresSelectorProps) {
+  /** Valor temporal del desplegable (se limpía tras incorporar a la lista) */
   const [selectedProveedor, setSelectedProveedor] = useState<string>('')
 
-  const agregarProveedor = () => {
-    if (selectedProveedor && !proveedoresSeleccionados.includes(selectedProveedor)) {
-      onChange([...proveedoresSeleccionados, selectedProveedor])
-      setSelectedProveedor('')
+  const handleElegirProveedor = (value: string) => {
+    if (!value) return
+    if (!proveedoresSeleccionados.includes(value)) {
+      onChange([...proveedoresSeleccionados, value])
     }
+    setSelectedProveedor('')
   }
 
   const eliminarProveedor = (proveedorId: string) => {
@@ -48,13 +50,16 @@ export function ProveedoresSelector({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <div className="flex-1">
-          <Select value={selectedProveedor} onValueChange={setSelectedProveedor}>
-            <SelectTrigger className={error ? 'border-red-500' : ''}>
-              <SelectValue placeholder="Seleccionar proveedor..." />
+          <Select
+            value={selectedProveedor || undefined}
+            onValueChange={handleElegirProveedor}
+          >
+            <SelectTrigger className={error ? 'border-destructive' : ''} aria-label="Agregar proveedor a la operación">
+              <SelectValue placeholder="Elegir proveedor para añadirlo a la lista…" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-200">
               {proveedoresDisponibles.map((proveedor) => (
                 <SelectItem key={proveedor.id} value={proveedor.id}>
                   {proveedor.razonSocial} - {proveedor.rut}
@@ -63,18 +68,12 @@ export function ProveedoresSelector({
             </SelectContent>
           </Select>
         </div>
-        <Button
-          type="button"
-          onClick={agregarProveedor}
-          disabled={!selectedProveedor}
-          className="shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Agregar
-        </Button>
+        <p className="text-xs text-muted-foreground">
+          Cada proveedor que elija se incorpora de inmediato. Use la X para quitar uno de la lista.
+        </p>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {proveedoresSeleccionados.length > 0 && (
         <div className="space-y-2">

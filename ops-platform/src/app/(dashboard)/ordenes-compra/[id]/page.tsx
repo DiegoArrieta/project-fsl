@@ -137,9 +137,11 @@ export default function OrdenCompraDetallePage() {
         <div className="flex gap-2">
           {oc.estado === 'BORRADOR' && (
             <>
-              <Button variant="outline" type="button">
-                <Edit className="h-4 w-4 mr-2" />
-                Editar
+              <Button variant="outline" type="button" asChild>
+                <Link href={`/ordenes-compra/${id}/editar`}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Link>
               </Button>
               <Button variant="destructive" size="icon" type="button" aria-label="Eliminar borrador">
                 <Trash2 className="h-4 w-4" />

@@ -173,20 +173,67 @@ model ContactoPersona {
   @@map("contacto_persona")
 }
 
+/// Categoría: Pallet Verde, Cepillado, Certificado, etc.
+model CategoriaPallet {
+  id          String       @id @default(uuid()) @db.Uuid
+  codigo      String       @unique @db.VarChar(20)
+  nombre      String       @db.VarChar(100)
+  descripcion String?
+  activo      Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+  tipos       TipoPallet[]
+
+  @@index([activo])
+  @@map("categoria_pallet")
+}
+
+model Pais {
+  id          String           @id @default(uuid()) @db.Uuid
+  codigoIso   String           @unique @map("codigo_iso") @db.Char(2)
+  nombre      String           @db.VarChar(100)
+  activo      Boolean          @default(true)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamp(6)
+  tiposPallet TipoPalletPais[]
+
+  @@index([activo])
+  @@map("pais")
+}
+
 model TipoPallet {
   id                    String             @id @default(uuid()) @db.Uuid
-  codigo                String             @unique @db.VarChar(10)
+  categoriaId           String             @map("categoria_id") @db.Uuid
+  codigo                String             @db.VarChar(10)
   nombre                String             @db.VarChar(100)
   descripcion           String?
+  dimensiones           String?            @db.VarChar(200)
   requiereCertificacion Boolean            @default(false) @map("requiere_certificacion")
   activo                Boolean            @default(true)
   createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
+  categoria             CategoriaPallet    @relation(fields: [categoriaId], references: [id])
+  paises                TipoPalletPais[]
   operacionLineas       OperacionLinea[]
   ordenCompraLineas     OrdenCompraLinea[]
   presupuestoLineas           PresupuestoLinea[]
   solicitudCotizacionLineas   SolicitudCotizacionLinea[]
 
+  @@unique([categoriaId, codigo])
+  @@index([categoriaId])
   @@map("tipo_pallet")
+}
+
+model TipoPalletPais {
+  tipoPalletId String     @map("tipo_pallet_id") @db.Uuid
+  paisId       String     @map("pais_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  tipoPallet   TipoPallet @relation(fields: [tipoPalletId], references: [id], onDelete: Cascade)
+  pais         Pais       @relation(fields: [paisId], references: [id], onDelete: Cascade)
+
+  @@id([tipoPalletId, paisId])
+  @@index([paisId])
+  @@map("tipo_pallet_pais")
 }
 
 model Operacion {

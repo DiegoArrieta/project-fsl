@@ -18,41 +18,94 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('🌱 Iniciando seed de base de datos...')
 
-  // 1. Crear tipos de pallet
-  console.log('📦 Creando tipos de pallet...')
-  const tipoPV = await prisma.tipoPallet.upsert({
-    where: { codigo: 'PV' },
+  console.log('📦 Creando categorías y países de pallet...')
+  const catVerde = await prisma.categoriaPallet.upsert({
+    where: { codigo: 'VERDE' },
     update: {},
     create: {
+      codigo: 'VERDE',
+      nombre: 'Pallet Verde',
+      descripcion: 'Pallet de madera sin tratamiento',
+      activo: true,
+    },
+  })
+  const catCepillado = await prisma.categoriaPallet.upsert({
+    where: { codigo: 'CEPILLADO' },
+    update: {},
+    create: {
+      codigo: 'CEPILLADO',
+      nombre: 'Cepillado',
+      descripcion: 'Pallet con acabado cepillado',
+      activo: true,
+    },
+  })
+  const catCert = await prisma.categoriaPallet.upsert({
+    where: { codigo: 'CERTIFICADO' },
+    update: {},
+    create: {
+      codigo: 'CERTIFICADO',
+      nombre: 'Certificado',
+      descripcion: 'Pallet con tratamiento fitosanitario NIMF-15',
+      activo: true,
+    },
+  })
+
+  const paisCl = await prisma.pais.upsert({
+    where: { codigoIso: 'CL' },
+    update: {},
+    create: { codigoIso: 'CL', nombre: 'Chile', activo: true },
+  })
+  const paisUs = await prisma.pais.upsert({
+    where: { codigoIso: 'US' },
+    update: {},
+    create: { codigoIso: 'US', nombre: 'Estados Unidos', activo: true },
+  })
+
+  const paisesChileYUs = { deleteMany: {}, create: [{ paisId: paisCl.id }, { paisId: paisUs.id }] }
+
+  console.log('📦 Creando tipos de pallet...')
+  const tipoPV = await prisma.tipoPallet.upsert({
+    where: { categoriaId_codigo: { categoriaId: catVerde.id, codigo: 'PV' } },
+    update: { dimensiones: '1200×1000 mm', paises: paisesChileYUs },
+    create: {
+      categoriaId: catVerde.id,
       codigo: 'PV',
       nombre: 'Pallet Verde',
       descripcion: 'Pallet de madera sin tratamiento',
+      dimensiones: '1200×1000 mm',
       requiereCertificacion: false,
       activo: true,
+      paises: { create: [{ paisId: paisCl.id }, { paisId: paisUs.id }] },
     },
   })
 
   const tipoPR = await prisma.tipoPallet.upsert({
-    where: { codigo: 'PR' },
-    update: {},
+    where: { categoriaId_codigo: { categoriaId: catCepillado.id, codigo: 'PR' } },
+    update: { dimensiones: '1200×1000 mm', paises: paisesChileYUs },
     create: {
+      categoriaId: catCepillado.id,
       codigo: 'PR',
       nombre: 'Pallet Rústico',
       descripcion: 'Pallet de madera con acabado básico',
+      dimensiones: '1200×1000 mm',
       requiereCertificacion: false,
       activo: true,
+      paises: { create: [{ paisId: paisCl.id }, { paisId: paisUs.id }] },
     },
   })
 
   const tipoPC = await prisma.tipoPallet.upsert({
-    where: { codigo: 'PC' },
-    update: {},
+    where: { categoriaId_codigo: { categoriaId: catCert.id, codigo: 'PC' } },
+    update: { dimensiones: '1200×1000 mm', paises: paisesChileYUs },
     create: {
+      categoriaId: catCert.id,
       codigo: 'PC',
       nombre: 'Pallet Certificado',
       descripcion: 'Pallet con tratamiento fitosanitario NIMF-15',
+      dimensiones: '1200×1000 mm',
       requiereCertificacion: true,
       activo: true,
+      paises: { create: [{ paisId: paisCl.id }, { paisId: paisUs.id }] },
     },
   })
 

@@ -52,7 +52,9 @@ async function fetchTiposPallet(): Promise<TipoPalletOption[]> {
 }
 
 const validationSchema = Yup.object().shape({
-  proveedorId: Yup.string().uuid('Seleccione un proveedor válido').required('Proveedor es requerido'),
+  proveedorId: Yup.string()
+    .required('Seleccione un proveedor')
+    .uuid('Identificador de proveedor no válido'),
   fecha: Yup.string().required('Fecha es requerida'),
   fechaEntregaEsperada: Yup.string().nullable(),
   direccionEntrega: Yup.string().nullable(),
@@ -197,7 +199,7 @@ export default function NuevaOrdenCompraPage() {
             <p>Cargando proveedores y tipos de pallet…</p>
           </div>
         ) : (
-          <form onSubmit={formik.handleSubmit} className="space-y-6">
+          <form noValidate onSubmit={formik.handleSubmit} className="space-y-6">
             {/* Información General */}
             <Card className="shadow-lg border-none">
               <CardHeader className="space-y-1 bg-gradient-to-br from-blue-50/50 dark:from-blue-950/20 to-background">
@@ -215,7 +217,10 @@ export default function NuevaOrdenCompraPage() {
                   </Label>
                   <Select
                     value={formik.values.proveedorId || undefined}
-                    onValueChange={(value) => formik.setFieldValue('proveedorId', value)}
+                    onValueChange={(value) => {
+                      void formik.setFieldValue('proveedorId', value, true)
+                      void formik.setFieldTouched('proveedorId', true, false)
+                    }}
                   >
                     <SelectTrigger id="proveedorId" className="mt-2" aria-required>
                       <SelectValue placeholder="Selecciona un proveedor..." />
