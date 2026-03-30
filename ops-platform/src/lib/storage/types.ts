@@ -11,11 +11,21 @@ export interface UploadResult {
   size: number
 }
 
+/** Opciones opcionales para rutas bajo el bucket (directorio lógico validado) */
+export interface UploadDocumentOptions {
+  keyPrefix?: string
+}
+
 export interface IStorageProvider {
   /**
    * Sube un archivo al storage
    */
-  uploadDocument(file: Buffer, filename: string, contentType: string): Promise<UploadResult>
+  uploadDocument(
+    file: Buffer,
+    filename: string,
+    contentType: string,
+    options?: UploadDocumentOptions
+  ): Promise<UploadResult>
 
   /**
    * Elimina un archivo del storage

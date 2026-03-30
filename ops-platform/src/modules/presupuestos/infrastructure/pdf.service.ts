@@ -3,7 +3,7 @@ import Handlebars from 'handlebars'
 import { prisma } from '@/lib/db'
 
 /**
- * Servicio para generar PDFs de presupuestos y cotizaciones usando Puppeteer y Handlebars
+ * Servicio para generar PDFs de presupuestos usando Puppeteer y Handlebars
  */
 export class PDFService {
   private static getDocumentoPdfStyles(): string {
@@ -231,89 +231,6 @@ export class PDFService {
   }
 
   /**
-   * Genera PDF de solicitud de cotización a proveedor (misma matriz visual que presupuesto).
-   */
-  static async generateSolicitudCotizacionPDF(solicitudId: string): Promise<Buffer> {
-    const solicitud = await prisma.solicitudCotizacion.findUnique({
-      where: { id: solicitudId },
-      include: {
-        proveedor: true,
-        lineas: {
-          include: { tipoPallet: true },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    })
-
-    if (!solicitud) {
-      throw new Error('Solicitud de cotización no encontrada')
-    }
-
-    const estadoLabels: Record<string, string> = {
-      BORRADOR: 'Borrador',
-      ENVIADO: 'Enviado',
-      CERRADO: 'Cerrado',
-    }
-
-    const proveedor = solicitud.proveedor
-    const templateData = {
-      numero: solicitud.numero,
-      fecha: solicitud.fecha.toLocaleDateString('es-CL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }),
-      estado: estadoLabels[solicitud.estado] ?? solicitud.estado,
-      proveedor: {
-        razonSocial: proveedor.razonSocial,
-        rut: proveedor.rut,
-        direccion: proveedor.direccion,
-        comuna: proveedor.comuna,
-        ciudad: proveedor.ciudad,
-        telefono: proveedor.telefono,
-        email: proveedor.email,
-        nombreFantasia: proveedor.nombreFantasia,
-      },
-      observaciones: solicitud.observaciones,
-      lineas: solicitud.lineas.map((linea, index) => ({
-        numero: index + 1,
-        tipoPallet: linea.tipoPallet.nombre,
-        cantidad: linea.cantidad,
-        descripcion: linea.descripcion || '',
-      })),
-    }
-
-    const htmlTemplate = this.getSolicitudCotizacionHTMLTemplate()
-    const template = Handlebars.compile(htmlTemplate)
-    const html = template(templateData)
-
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
-
-    try {
-      const page = await browser.newPage()
-      await page.setContent(html, { waitUntil: 'networkidle0' })
-
-      const pdf = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20mm',
-          right: '15mm',
-          bottom: '20mm',
-          left: '15mm',
-        },
-      })
-
-      return Buffer.from(pdf)
-    } finally {
-      await browser.close()
-    }
-  }
-
-  /**
    * Plantilla HTML para el presupuesto
    */
   private static getHTMLTemplate(): string {
@@ -408,88 +325,6 @@ export class PDFService {
       <div class="total-value">{{total}}</div>
     </div>
   </div>
-
-  {{#if observaciones}}
-  <div class="observaciones">
-    <h3>Observaciones</h3>
-    <p>{{observaciones}}</p>
-  </div>
-  {{/if}}
-
-  <div class="footer">
-    <p>Forestal Santa Lucía SpA - Sistema de Gestión Operativa</p>
-    <p>Este documento fue generado automáticamente</p>
-  </div>
-</body>
-</html>
-    `
-  }
-
-  private static getSolicitudCotizacionHTMLTemplate(): string {
-    return `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cotizacion {{numero}}</title>
-  <style>${this.getDocumentoPdfStyles()}</style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo">🌲 Forestal Santa Lucía SpA</div>
-    <div class="header-info">
-      <h1>Cotizacion</h1>
-      <div><strong>N°:</strong> {{numero}}</div>
-      <div><strong>Fecha:</strong> {{fecha}}</div>
-      <div><strong>Estado:</strong> {{estado}}</div>
-    </div>
-  </div>
-
-  <div class="cliente-section">
-    <h2>Proveedor</h2>
-    <div><strong>{{proveedor.razonSocial}}</strong></div>
-    {{#if proveedor.nombreFantasia}}
-    <div>{{proveedor.nombreFantasia}}</div>
-    {{/if}}
-    <div>RUT: {{proveedor.rut}}</div>
-    {{#if proveedor.direccion}}
-    <div>{{proveedor.direccion}}</div>
-    {{/if}}
-    {{#if proveedor.comuna}}
-    <div>{{proveedor.comuna}}</div>
-    {{/if}}
-    {{#if proveedor.ciudad}}
-    <div>{{proveedor.ciudad}}</div>
-    {{/if}}
-    {{#if proveedor.telefono}}
-    <div>Tel: {{proveedor.telefono}}</div>
-    {{/if}}
-    {{#if proveedor.email}}
-    <div>Email: {{proveedor.email}}</div>
-    {{/if}}
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Tipo de Pallet</th>
-        <th>Cantidad</th>
-        <th>Descripción / Nota</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{#each lineas}}
-      <tr>
-        <td>{{numero}}</td>
-        <td>{{tipoPallet}}</td>
-        <td>{{cantidad}}</td>
-        <td>{{descripcion}}</td>
-      </tr>
-      {{/each}}
-    </tbody>
-  </table>
 
   {{#if observaciones}}
   <div class="observaciones">

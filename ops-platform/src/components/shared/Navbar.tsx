@@ -11,7 +11,6 @@ import {
   Building2,
   Calendar,
   Calculator,
-  ClipboardList,
   Landmark,
   Package,
 } from 'lucide-react'
@@ -21,7 +20,6 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/operaciones', label: 'Operaciones', icon: FileText },
   { href: '/presupuestos', label: 'Presupuestos', icon: Calculator },
-  { href: '/solicitudes-cotizacion', label: 'Solicitudes prov.', icon: ClipboardList },
   { href: '/ordenes-compra', label: 'Órdenes de Compra', icon: ShoppingCart },
   { href: '/empresas', label: 'Empresas', icon: Building2 },
   { href: '/empresas-factoring', label: 'Emp. factoring', icon: Landmark },

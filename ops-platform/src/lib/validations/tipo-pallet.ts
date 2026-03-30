@@ -2,6 +2,13 @@ import { z } from 'zod'
 
 const uuid = z.string().uuid('ID inválido')
 
+const fotoFields = {
+  fotoKey: z.string().max(500).nullable().optional(),
+  fotoNombre: z.string().max(255).nullable().optional(),
+  fotoContentType: z.string().max(100).nullable().optional(),
+  fotoSize: z.number().int().min(0).nullable().optional(),
+}
+
 export const createTipoPalletSchema = z.object({
   categoriaId: uuid,
   codigo: z
@@ -34,5 +41,9 @@ export const updateTipoPalletSchema = z
     requiereCertificacion: z.boolean().optional(),
     activo: z.boolean().optional(),
     paisIds: z.array(uuid).min(1).optional(),
+    fotoKey: z.string().max(500).nullable().optional(),
+    fotoNombre: z.string().max(255).nullable().optional(),
+    fotoContentType: z.string().max(100).nullable().optional(),
+    fotoSize: z.number().int().min(0).nullable().optional(),
   })
   .strict()

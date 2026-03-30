@@ -107,7 +107,6 @@ model Proveedor {
   ordenesCompra     OrdenCompra[]
   empresa                  Empresa?               @relation(fields: [empresaId], references: [id])
   personasContacto         ContactoPersona[]
-  solicitudesCotizacion    SolicitudCotizacion[]
 
   @@index([activo])
   @@index([empresaId])
@@ -208,6 +207,10 @@ model TipoPallet {
   nombre                String             @db.VarChar(100)
   descripcion           String?
   dimensiones           String?            @db.VarChar(200)
+  fotoKey               String?            @map("foto_key") @db.VarChar(500)
+  fotoNombre            String?            @map("foto_nombre") @db.VarChar(255)
+  fotoContentType       String?            @map("foto_content_type") @db.VarChar(100)
+  fotoSize              Int?               @map("foto_size")
   requiereCertificacion Boolean            @default(false) @map("requiere_certificacion")
   activo                Boolean            @default(true)
   createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
@@ -217,7 +220,6 @@ model TipoPallet {
   operacionLineas       OperacionLinea[]
   ordenCompraLineas     OrdenCompraLinea[]
   presupuestoLineas           PresupuestoLinea[]
-  solicitudCotizacionLineas   SolicitudCotizacionLinea[]
 
   @@unique([categoriaId, codigo])
   @@index([categoriaId])
@@ -556,43 +558,6 @@ model PresupuestoLinea {
   @@map("presupuesto_linea")
 }
 
-/// Solicitud de cotización a un proveedor (solo cantidades por línea; sin operación asociada por ahora)
-model SolicitudCotizacion {
-  id            String                    @id @default(uuid()) @db.Uuid
-  numero        String                    @unique @db.VarChar(20)
-  proveedorId   String                    @map("proveedor_id") @db.Uuid
-  fecha         DateTime                  @db.Date
-  observaciones String?                   @db.Text
-  estado        EstadoSolicitudCotizacion @default(BORRADOR)
-  createdAt     DateTime                  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime                  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  proveedor Proveedor                  @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
-  lineas    SolicitudCotizacionLinea[]
-
-  @@index([proveedorId])
-  @@index([fecha(sort: Desc)])
-  @@index([estado])
-  @@map("solicitud_cotizacion")
-}
-
-model SolicitudCotizacionLinea {
-  id                    String @id @default(uuid()) @db.Uuid
-  solicitudCotizacionId String @map("solicitud_cotizacion_id") @db.Uuid
-  tipoPalletId          String @map("tipo_pallet_id") @db.Uuid
-  cantidad              Int
-  descripcion           String? @db.VarChar(255)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  solicitud  SolicitudCotizacion @relation(fields: [solicitudCotizacionId], references: [id], onDelete: Cascade)
-  tipoPallet TipoPallet          @relation(fields: [tipoPalletId], references: [id])
-
-  @@index([solicitudCotizacionId])
-  @@index([tipoPalletId])
-  @@map("solicitud_cotizacion_linea")
-}
-
 model DocumentSequence {
   id        String        @id @default(uuid()) @db.Uuid
   tipo      TipoSecuencia
@@ -615,11 +580,4 @@ enum TipoSecuencia {
   PRESUPUESTO
   OPERACION
   ORDEN_COMPRA
-  SOLICITUD_COTIZACION
-}
-
-enum EstadoSolicitudCotizacion {
-  BORRADOR
-  ENVIADO
-  CERRADO
 }

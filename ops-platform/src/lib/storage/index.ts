@@ -67,6 +67,7 @@ export function validateFile(filename: string, contentType: string, size: number
 export * from './types'
 export { MockStorageProvider } from './mock'
 export { S3StorageProvider } from './s3'
+export { normalizeUploadDirectory, ALLOWED_UPLOAD_ROOTS } from './upload-path'
 
 
 

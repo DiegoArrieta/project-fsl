@@ -4,7 +4,7 @@
  * Útil para desarrollo y testing
  */
 
-import { IStorageProvider, UploadResult, StorageError } from './types'
+import { IStorageProvider, UploadResult, StorageError, UploadDocumentOptions } from './types'
 
 export class MockStorageProvider implements IStorageProvider {
   private mockDocuments: Map<string, { url: string; filename: string; contentType: string; size: number }>
@@ -19,17 +19,17 @@ export class MockStorageProvider implements IStorageProvider {
   async uploadDocument(
     file: Buffer,
     filename: string,
-    contentType: string
+    contentType: string,
+    options?: UploadDocumentOptions
   ): Promise<UploadResult> {
     // Simular delay de red
     await new Promise((resolve) => setTimeout(resolve, 300))
 
-    // Generar key único (timestamp + nombre sanitizado)
     const timestamp = Date.now()
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const key = `mock/${timestamp}-${sanitizedFilename}`
+    const prefix = (options?.keyPrefix ?? 'general').replace(/^\/+|\/+$/g, '')
+    const key = `${prefix}/${timestamp}-${sanitizedFilename}`
 
-    // Generar URL mock
     const url = `/uploads/mock/${key}`
 
     // Guardar en "memoria" (solo para simular exists)

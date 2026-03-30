@@ -119,6 +119,10 @@ export async function POST(request: NextRequest) {
         nombre: data.nombre.trim(),
         descripcion: data.descripcion?.trim() || null,
         dimensiones: data.dimensiones?.trim() || null,
+        fotoKey: data.fotoKey?.trim() || null,
+        fotoNombre: data.fotoNombre?.trim() || null,
+        fotoContentType: data.fotoContentType?.trim() || null,
+        fotoSize: data.fotoSize ?? null,
         requiereCertificacion: data.requiereCertificacion ?? false,
         activo: data.activo ?? true,
         paises: {

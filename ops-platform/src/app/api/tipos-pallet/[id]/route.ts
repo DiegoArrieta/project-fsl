@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { updateTipoPalletSchema } from '@/lib/validations/tipo-pallet'
+import { getStorageProvider } from '@/lib/storage'
 
 const includeTipos = {
   categoria: true,
@@ -91,6 +92,17 @@ export async function PUT(
     if (data.dimensiones !== undefined) patch.dimensiones = data.dimensiones?.trim() || null
     if (data.requiereCertificacion !== undefined) patch.requiereCertificacion = data.requiereCertificacion
     if (data.activo !== undefined) patch.activo = data.activo
+    if (data.fotoKey !== undefined) patch.fotoKey = data.fotoKey?.trim() || null
+    if (data.fotoNombre !== undefined) patch.fotoNombre = data.fotoNombre?.trim() || null
+    if (data.fotoContentType !== undefined) patch.fotoContentType = data.fotoContentType?.trim() || null
+    if (data.fotoSize !== undefined) patch.fotoSize = data.fotoSize
+
+    const oldFotoKey = existing.fotoKey
+    const newFotoKey = data.fotoKey !== undefined ? data.fotoKey?.trim() || null : undefined
+    const shouldRemoveOldFoto =
+      oldFotoKey &&
+      newFotoKey !== undefined &&
+      newFotoKey !== oldFotoKey
 
     const hasScalarPatch = Object.keys(patch).length > 0
     const row = await prisma.$transaction(async (tx) => {
@@ -112,6 +124,15 @@ export async function PUT(
         include: includeTipos,
       })
     })
+
+    if (shouldRemoveOldFoto) {
+      try {
+        const storage = getStorageProvider()
+        await storage.deleteDocument(oldFotoKey)
+      } catch {
+        /* objeto ya inexistente u otro fallo — no bloquear */
+      }
+    }
 
     return NextResponse.json({
       success: true,

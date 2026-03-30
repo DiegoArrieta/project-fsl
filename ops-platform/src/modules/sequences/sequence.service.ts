@@ -8,7 +8,7 @@ import { TipoSecuencia, Prisma, PrismaClient } from '@prisma/client'
 export class SequenceService {
   /**
    * Genera el siguiente número de documento según el tipo
-   * Formato: PR-YYYY-NNNNN, OP-YYYY-NNNNN, OC-YYYY-NNNNN, SC-YYYY-NNNNN
+   * Formato: PR-YYYY-NNNNN, OP-YYYY-NNNNN, OC-YYYY-NNNNN
    */
   static async getNextSequence(
     tipo: TipoSecuencia,
@@ -60,8 +60,6 @@ export class SequenceService {
         return 'OP'
       case 'ORDEN_COMPRA':
         return 'OC'
-      case 'SOLICITUD_COTIZACION':
-        return 'SC'
       default:
         throw new Error(`Tipo de secuencia no válido: ${tipo}`)
     }

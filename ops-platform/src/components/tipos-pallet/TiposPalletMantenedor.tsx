@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useFormik, FormikProvider } from 'formik'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as Yup from 'yup'
@@ -34,8 +34,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Search, Plus, Loader2, Pencil, Package, Globe } from 'lucide-react'
+import { Search, Plus, Loader2, Pencil, Package, Globe, ImageIcon, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useFileUpload } from '@/hooks/use-file-upload'
 
 interface PaisRef {
   id: string
@@ -56,6 +57,10 @@ interface TipoPalletRow {
   nombre: string
   descripcion: string | null
   dimensiones: string | null
+  fotoKey: string | null
+  fotoNombre: string | null
+  fotoContentType: string | null
+  fotoSize: number | null
   requiereCertificacion: boolean
   activo: boolean
   categoria: CategoriaRef
@@ -101,13 +106,18 @@ const formSchema = Yup.object({
   requiereCertificacion: Yup.boolean(),
   activo: Yup.boolean(),
   paisIds: Yup.array().of(Yup.string().uuid()).min(1, 'Seleccione al menos un país'),
+  fotoKey: Yup.string().max(500).nullable(),
+  fotoNombre: Yup.string().max(255).nullable(),
+  fotoContentType: Yup.string().max(100).nullable(),
+  fotoSize: Yup.number().integer().min(0).nullable(),
 })
 
 function invalidateTiposPalletQueries(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ['tipos-pallet'] })
   queryClient.invalidateQueries({ queryKey: ['tipos-pallet-mantenedor'] })
-  queryClient.invalidateQueries({ queryKey: ['tipos-pallet-solicitud'] })
 }
+
+const IMAGENES_PALLET = ['image/jpeg', 'image/png'] as const
 
 export function TiposPalletMantenedor() {
   const queryClient = useQueryClient()
@@ -115,6 +125,13 @@ export function TiposPalletMantenedor() {
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editando, setEditando] = useState<TipoPalletRow | null>(null)
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null)
+  const fotoInputRef = useRef<HTMLInputElement>(null)
+
+  const { upload: uploadFoto, isUploading: isFotoUploading } = useFileUpload({
+    directory: 'tipos-pallet',
+    onError: () => {},
+  })
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tipos-pallet-mantenedor', buscar, filtroActivo],
@@ -156,6 +173,10 @@ export function TiposPalletMantenedor() {
       nombre: editando?.nombre ?? '',
       descripcion: editando?.descripcion ?? '',
       dimensiones: editando?.dimensiones ?? '',
+      fotoKey: editando?.fotoKey ?? null,
+      fotoNombre: editando?.fotoNombre ?? null,
+      fotoContentType: editando?.fotoContentType ?? null,
+      fotoSize: editando?.fotoSize ?? null,
       requiereCertificacion: editando?.requiereCertificacion ?? false,
       activo: editando?.activo ?? true,
       paisIds: editando ? editando.paises.map((x) => x.paisId) : ([] as string[]),
@@ -168,6 +189,10 @@ export function TiposPalletMantenedor() {
         nombre: values.nombre.trim(),
         descripcion: values.descripcion?.trim() || null,
         dimensiones: values.dimensiones?.trim() || null,
+        fotoKey: values.fotoKey,
+        fotoNombre: values.fotoNombre,
+        fotoContentType: values.fotoContentType,
+        fotoSize: values.fotoSize,
         requiereCertificacion: values.requiereCertificacion,
         activo: values.activo,
         paisIds: values.paisIds,
@@ -193,6 +218,7 @@ export function TiposPalletMantenedor() {
           if (!res.ok) throw new Error((json as { error?: string }).error || 'Error al crear')
           toast.success('Tipo de pallet creado')
         }
+        revokePreview()
         resetForm()
         setDialogOpen(false)
         setEditando(null)
@@ -203,14 +229,70 @@ export function TiposPalletMantenedor() {
     },
   })
 
+  const revokePreview = () => {
+    setPreviewObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }
+
+  useEffect(() => {
+    return () => {
+      setPreviewObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [])
+
   const handleNueva = () => {
+    revokePreview()
     setEditando(null)
     setDialogOpen(true)
   }
 
   const handleEditar = (row: TipoPalletRow) => {
+    revokePreview()
     setEditando(row)
     setDialogOpen(true)
+  }
+
+  const handlePickFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!IMAGENES_PALLET.includes(file.type as (typeof IMAGENES_PALLET)[number])) {
+      toast.error('Solo imágenes JPG o PNG (máx. 10 MB)')
+      return
+    }
+    revokePreview()
+    const local = URL.createObjectURL(file)
+    setPreviewObjectUrl(local)
+    const result = await uploadFoto(file)
+    if (!result) {
+      URL.revokeObjectURL(local)
+      setPreviewObjectUrl(null)
+      return
+    }
+    await formik.setValues({
+      ...formik.values,
+      fotoKey: result.key,
+      fotoNombre: result.filename,
+      fotoContentType: result.contentType,
+      fotoSize: result.size,
+    })
+    toast.success('Imagen lista para guardar')
+  }
+
+  const handleQuitarFoto = () => {
+    revokePreview()
+    void formik.setValues({
+      ...formik.values,
+      fotoKey: null,
+      fotoNombre: null,
+      fotoContentType: null,
+      fotoSize: null,
+    })
   }
 
   const togglePais = (paisId: string) => {
@@ -232,7 +314,7 @@ export function TiposPalletMantenedor() {
           </h1>
           <p className="text-muted-foreground mt-1">
             Categoría (Verde, Cepillado, Certificado), dimensiones y países de destino. Los activos
-            aparecen en órdenes de compra, presupuestos y solicitudes.{' '}
+            aparecen en órdenes de compra y presupuestos.{' '}
             <Link href="/ordenes-compra" className="text-primary underline font-medium">
               Órdenes de compra
             </Link>
@@ -299,6 +381,7 @@ export function TiposPalletMantenedor() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Foto</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Código</TableHead>
                 <TableHead>Nombre</TableHead>
@@ -312,6 +395,18 @@ export function TiposPalletMantenedor() {
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
+                  <TableCell className="w-14">
+                    {row.fotoKey ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/tipos-pallet/${row.id}/foto`}
+                        alt=""
+                        className="h-10 w-10 rounded object-cover border bg-muted"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className="font-medium">{row.categoria.nombre}</span>
                     <span className="text-muted-foreground text-xs ml-1">({row.categoria.codigo})</span>
@@ -381,7 +476,10 @@ export function TiposPalletMantenedor() {
         open={dialogOpen}
         onOpenChange={(o) => {
           setDialogOpen(o)
-          if (!o) setEditando(null)
+          if (!o) {
+            revokePreview()
+            setEditando(null)
+          }
         }}
       >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" aria-describedby="tp-desc">
@@ -458,6 +556,61 @@ export function TiposPalletMantenedor() {
                   onBlur={formik.handleBlur}
                   placeholder="Ej: 1200×1000 mm"
                 />
+              </div>
+
+              <div className="space-y-2 rounded-md border p-3">
+                <Label className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" aria-hidden />
+                  Foto del pallet (opcional)
+                </Label>
+                <p className="text-xs text-muted-foreground">JPG o PNG, hasta 10 MB. Se guarda en almacenamiento (mock o S3).</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  {(previewObjectUrl || (editando?.id && formik.values.fotoKey)) && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={
+                        previewObjectUrl ||
+                        (editando?.id && formik.values.fotoKey
+                          ? `/api/tipos-pallet/${editando.id}/foto`
+                          : '')
+                      }
+                      alt=""
+                      className="h-20 w-20 rounded object-cover border bg-muted"
+                    />
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={fotoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      aria-label="Elegir foto del pallet"
+                      onChange={handlePickFoto}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isFotoUploading || formik.isSubmitting}
+                      onClick={() => fotoInputRef.current?.click()}
+                    >
+                      {isFotoUploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
+                          Subiendo…
+                        </>
+                      ) : (
+                        'Elegir imagen'
+                      )}
+                    </Button>
+                    {(formik.values.fotoKey || previewObjectUrl) && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleQuitarFoto}>
+                        <X className="h-4 w-4 mr-1" aria-hidden />
+                        Quitar foto
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
