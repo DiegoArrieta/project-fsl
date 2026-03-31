@@ -79,24 +79,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.js ./prisma.config.js
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 
-RUN mkdir -p ./node_modules ./node_modules/.bin ./node_modules/@prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/.bin ./node_modules/.bin
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/dotenv ./node_modules/dotenv
-# Prisma CLI (@prisma/dev, @prisma/config) resuelve muchas dependencias en la raíz de node_modules;
-# sin ellas: "Cannot find module 'valibot'" al ejecutar prisma generate / migrate en runtime.
+# Next standalone solo incluye node_modules recortado; Prisma CLI encadena muchas deps hoisteadas
+# (effect→fast-check, proper-lockfile→graceful-fs, …). Fusionar el árbol completo de `npm ci`
+# (stage deps) evita MODULE_NOT_FOUND sin mantener listas manuales. Trade-off: imagen más grande
+# al incluir también devDependencies del lockfile (ESLint, Prettier, TypeScript, etc.).
 RUN --mount=from=deps,source=/app/node_modules,target=/deps_nm \
     set -eu && \
-    for name in \
-      valibot hono pathe remeda foreground-child get-port-please grammex graphmatch graceful-fs \
-      http-status-codes proper-lockfile retry std-env zeptomatch mysql2 postgres c12 deepmerge-ts effect empathic; \
-    do \
-      if [ -e "/deps_nm/$name" ]; then cp -a "/deps_nm/$name" ./node_modules/; fi; \
-    done && \
-    if [ -d /deps_nm/@electric-sql ]; then cp -a /deps_nm/@electric-sql ./node_modules/; fi && \
-    if [ -d /deps_nm/@hono ]; then cp -a /deps_nm/@hono ./node_modules/; fi && \
-    if [ -d /deps_nm/@mrleebo ]; then cp -a /deps_nm/@mrleebo ./node_modules/; fi && \
+    mkdir -p ./node_modules && \
+    cp -a /deps_nm/. ./node_modules/ && \
     chown -R nextjs:nodejs ./node_modules
 RUN chmod +x ./node_modules/.bin/* 2>/dev/null || true
 
