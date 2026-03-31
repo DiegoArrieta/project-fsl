@@ -51,7 +51,9 @@ export async function PATCH(
       },
       include: {
         cliente: true,
-        proveedor: true,
+        proveedores: {
+          include: { proveedor: true },
+        },
         lineas: {
           include: {
             tipoPallet: true,

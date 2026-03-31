@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": ".."
+		},
+		{
+			"path": "../../../apps/proyectos/2024/web/microwebs/lds-planner"
 		}
 	]
 }

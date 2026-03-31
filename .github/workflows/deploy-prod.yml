@@ -1,0 +1,206 @@
+# =============================================================================
+# Forestal Santa Lucía — Deploy VPS producción (ops-platform)
+# =============================================================================
+# Trigger: push a main
+# Registry: GHCR
+# =============================================================================
+
+name: Deploy VPS Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/ops-platform
+
+jobs:
+  build:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE_NAME_LC=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
+          tags: |
+            type=raw,value=prod
+            type=raw,value=latest
+            type=sha,prefix=prod-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ops-platform
+          file: ./ops-platform/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Image digest
+        run: echo "Image digest ${{ steps.build.outputs.digest }}"
+
+      - name: Verify image user
+        run: |
+          echo "Verificando usuario de la imagen..."
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:prod"
+          docker pull "$IMAGE_TAG" || exit 0
+          USER=$(docker inspect "$IMAGE_TAG" --format='{{.Config.User}}' 2>/dev/null || echo "unknown")
+          echo "Usuario en imagen: $USER"
+          if [ "$USER" = "nextjs" ] || [ "$USER" = "1001" ]; then
+            echo "OK: usuario nextjs/1001"
+          else
+            echo "Advertencia: usuario inesperado $USER"
+          fi
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_HOST_PORT || 22 }}
+          source: "deploy/prod/docker-compose.yml"
+          target: "/opt/forestal-santa-lucia/prod/"
+          strip_components: 2
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_HOST_PORT || 22 }}
+          script: |
+            set -e
+            echo "Iniciando deploy producción..."
+
+            sudo mkdir -p /opt/forestal-santa-lucia/prod
+            sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} /opt/forestal-santa-lucia/prod
+
+            cd /opt/forestal-santa-lucia/prod
+
+            DB_USER=${{ secrets.POSTGRES_USER || 'fsl_ops_user' }}
+            DB_PASS=${{ secrets.POSTGRES_PASSWORD || 'CAMBIAR_PASSWORD_SEGURO' }}
+            DB_NAME=${{ secrets.POSTGRES_DB || 'fsl_ops_prod' }}
+
+            cat <<EOF > .env
+            GITHUB_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            GITHUB_REPO=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+            NODE_ENV=production
+            PORT=3000
+            HOSTNAME=0.0.0.0
+            NEXT_TELEMETRY_DISABLED=1
+
+            DATABASE_URL=postgresql://$DB_USER:$DB_PASS@postgres:5432/$DB_NAME
+
+            POSTGRES_DB=$DB_NAME
+            POSTGRES_USER=$DB_USER
+            POSTGRES_PASSWORD=$DB_PASS
+
+            NEXTAUTH_URL=${{ vars.NEXTAUTH_URL || secrets.NEXTAUTH_URL }}
+            NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+            AUTH_TRUST_HOST=true
+
+            USE_MOCK_STORAGE=${{ vars.USE_MOCK_STORAGE || secrets.USE_MOCK_STORAGE || 'false' }}
+            AWS_REGION=${{ secrets.AWS_REGION }}
+            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_S3_PUBLIC_BASE_URL=${{ vars.AWS_S3_PUBLIC_BASE_URL || secrets.AWS_S3_PUBLIC_BASE_URL }}
+            EOF
+
+            chmod 600 .env
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            docker compose pull
+
+            echo "Levantando PostgreSQL..."
+            docker compose up -d postgres
+
+            echo "Esperando Postgres healthy..."
+            until docker inspect --format='{{.State.Health.Status}}' fsl-ops-postgres-prod | grep -q healthy; do
+              sleep 2
+            done
+
+            echo "Levantando app..."
+            docker compose up -d --no-deps app
+            sleep 5
+
+            echo "Prisma generate..."
+            docker compose exec -T app npm run prisma:generate || true
+
+            echo "Prisma migrate deploy..."
+            docker compose exec -T app npm run prisma:migrate:deploy || {
+              echo "Error en migraciones"
+              docker compose logs app
+              exit 1
+            }
+
+            docker compose restart app
+
+            docker image prune -f
+
+            docker compose ps
+            echo "Deploy completado."
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_HOST_PORT || 22 }}
+          script: |
+            sleep 25
+            if docker ps | grep -q "fsl-ops-prod"; then
+              echo "Contenedor app en ejecución"
+            else
+              docker compose -f /opt/forestal-santa-lucia/prod/docker-compose.yml logs app
+              exit 1
+            fi

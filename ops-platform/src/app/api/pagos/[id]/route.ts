@@ -21,7 +21,9 @@ export async function GET(
       include: {
         operacion: {
           include: {
-            proveedor: true,
+            proveedores: {
+              include: { proveedor: true },
+            },
             cliente: true,
           },
         },

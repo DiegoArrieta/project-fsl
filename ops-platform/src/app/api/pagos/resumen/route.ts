@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
       include: {
         lineas: true,
         pagos: true,
-        proveedor: true,
+        proveedores: {
+          include: { proveedor: true },
+        },
         cliente: true,
       },
     })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, startTransition } from 'react'
+import { useState, useEffect, startTransition, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,7 +37,7 @@ async function fetchOperacionesPage(searchParams: URLSearchParams): Promise<{
   return { data: json.data || [], meta: json.meta }
 }
 
-export default function OperacionesPage() {
+function OperacionesPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [page, setPage] = useState(1)
@@ -411,5 +411,19 @@ export default function OperacionesPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function OperacionesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center p-8 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+        </div>
+      }
+    >
+      <OperacionesPageContent />
+    </Suspense>
   )
 }

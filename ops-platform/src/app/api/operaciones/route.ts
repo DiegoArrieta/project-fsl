@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { createOperacionSchema } from '@/lib/validations/operacion'
-import { calcularTotalesOperacion, generarNumeroOperacion } from '@/lib/operaciones/calculos'
+import { generarNumeroOperacion } from '@/lib/operaciones/calculos'
 
 /**
  * GET /api/operaciones
@@ -150,45 +150,18 @@ export async function POST(request: NextRequest) {
     })
     const numero = generarNumeroOperacion(ultimaOperacion?.numero || null)
 
-    // Calcular totales según tipo de operación
-    const totales = calcularTotalesOperacion(validatedData.tipo, validatedData.productos)
-
-    // Preparar datos para crear
-    const operacionData: Record<string, unknown> = {
+    // Preparar datos para crear (totales viven en líneas; no hay columnas agregadas en Operacion)
+    const operacionData: Prisma.OperacionUncheckedCreateInput = {
       numero,
       tipo: validatedData.tipo,
       fecha: new Date(validatedData.fecha),
-      direccionEntrega: validatedData.direccionEntrega,
-      ordenCompraCliente: validatedData.ordenCompraCliente,
-      observaciones: validatedData.observaciones,
+      direccionEntrega: validatedData.direccionEntrega ?? undefined,
+      ordenCompraCliente: validatedData.ordenCompraCliente ?? undefined,
+      observaciones: validatedData.observaciones ?? undefined,
       estadoDocumental: 'INCOMPLETA',
       estadoFinanciero: 'PENDIENTE',
-    }
-
-    // Agregar cliente si aplica
-    if (validatedData.clienteId) {
-      operacionData.clienteId = validatedData.clienteId
-    }
-
-    // Agregar evento si aplica
-    if (validatedData.eventoId) {
-      operacionData.eventoId = validatedData.eventoId
-    }
-
-    // Agregar totales según tipo
-    if (validatedData.tipo === 'COMPRA') {
-      operacionData.totalCompra = totales.totalCompra
-    } else {
-      const totalesVenta = totales as {
-        totalVenta: number
-        totalCompra: number
-        margenBruto: number
-        porcentajeMargen: number
-      }
-      operacionData.totalVenta = totalesVenta.totalVenta
-      operacionData.totalCompra = totalesVenta.totalCompra
-      operacionData.margenBruto = totalesVenta.margenBruto
-      operacionData.margenPorcentual = totalesVenta.porcentajeMargen
+      clienteId: validatedData.clienteId ?? undefined,
+      eventoId: validatedData.eventoId ?? undefined,
     }
 
     // Crear operación con productos y proveedores

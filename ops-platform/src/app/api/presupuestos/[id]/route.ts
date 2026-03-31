@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { PresupuestosController } from '@/modules/presupuestos/api/presupuestos.controller'
 
 const controller = new PresupuestosController()
@@ -8,7 +8,7 @@ const controller = new PresupuestosController()
  * Obtiene un presupuesto por ID
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params

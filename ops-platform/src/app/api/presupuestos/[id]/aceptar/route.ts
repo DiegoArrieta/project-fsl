@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { PresupuestosController } from '@/modules/presupuestos/api/presupuestos.controller'
 
 const controller = new PresupuestosController()
@@ -8,7 +7,7 @@ const controller = new PresupuestosController()
  * Acepta un presupuesto y crea una operación asociada
  */
 export async function POST(
-  request: NextRequest,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params

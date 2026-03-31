@@ -1,0 +1,32 @@
+# =============================================================================
+# Docker ignore — ops-platform
+# =============================================================================
+
+node_modules
+.npm
+.next
+out
+dist
+.vercel
+
+.git
+.gitignore
+.github
+
+.vscode
+.idea
+*.swp
+.DS_Store
+
+.env
+.env.*
+!.env.example
+
+*.log
+coverage
+.cache
+
+**/*.test.ts
+**/*.spec.ts
+
+README.md
