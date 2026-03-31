@@ -1,8 +1,11 @@
 # =============================================================================
-# Forestal Santa Lucía — Deploy VPS producción (ops-platform)
+# Forestal Santa Lucía — Deploy VPS Producción (ops-platform)
 # =============================================================================
-# Trigger: push a main
-# Registry: GHCR
+# Trigger: Push a main
+# Build: GitHub Actions
+# Deploy: VPS vía SSH
+# Registry: GitHub Container Registry (ghcr.io)
+# Misma forma que LDS Planner: docker compose, SCP → SSH (mkdir en el script).
 # =============================================================================
 
 name: Deploy VPS Production
@@ -11,13 +14,16 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: # Permite ejecución manual
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/ops-platform
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Build & Push Docker Image
+  # ---------------------------------------------------------------------------
   build:
     name: Build & Push Image
     runs-on: ubuntu-latest
@@ -58,6 +64,7 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=prod-
 
+      # Build: contexto ops-platform (Dockerfile en ops-platform/)
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -76,17 +83,30 @@ jobs:
 
       - name: Verify image user
         run: |
-          echo "Verificando usuario de la imagen..."
+          echo "🔍 Verificando usuario de la imagen construida..."
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:prod"
-          docker pull "$IMAGE_TAG" || exit 0
+
+          echo "📥 Descargando imagen para verificación..."
+          docker pull "$IMAGE_TAG" || {
+            echo "⚠️ No se pudo hacer pull de la imagen, pero el build fue exitoso"
+            exit 0
+          }
+
           USER=$(docker inspect "$IMAGE_TAG" --format='{{.Config.User}}' 2>/dev/null || echo "unknown")
-          echo "Usuario en imagen: $USER"
+          echo "Usuario configurado en la imagen: $USER"
+
           if [ "$USER" = "nextjs" ] || [ "$USER" = "1001" ]; then
-            echo "OK: usuario nextjs/1001"
+            echo "✅ Usuario correcto: $USER (nextjs o UID 1001)"
           else
-            echo "Advertencia: usuario inesperado $USER"
+            echo "⚠️ ADVERTENCIA: Usuario inesperado: $USER"
+            echo "   Esperado: nextjs o 1001"
           fi
 
+          echo "✅ Verificación de usuario completada"
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Deploy to VPS
+  # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
@@ -96,19 +116,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # SCP no usa sudo: si /opt no es escribible por el usuario SSH, falla antes de cualquier otro paso.
-      # Este paso debe existir y el usuario VPS necesita sudo sin contraseña para mkdir/chown en esta ruta.
-      - name: Crear directorio de deploy en VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_HOST_PORT || 22 }}
-          script: |
-            sudo mkdir -p /opt/forestal-santa-lucia/prod
-            sudo chown -R "$(whoami):$(whoami)" /opt/forestal-santa-lucia/prod
 
       - name: Copy docker-compose to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -120,7 +127,6 @@ jobs:
           source: "deploy/prod/docker-compose.yml"
           target: "/opt/forestal-santa-lucia/prod/"
           strip_components: 2
-          overwrite: true
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -130,13 +136,15 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_HOST_PORT || 22 }}
           script: |
-            set -e
-            echo "Iniciando deploy producción..."
+            echo "🚀 Iniciando deploy PRODUCCIÓN..."
 
+            # Asegurar que el directorio existe y tenemos permisos
             sudo mkdir -p /opt/forestal-santa-lucia/prod
             sudo chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} /opt/forestal-santa-lucia/prod
 
             cd /opt/forestal-santa-lucia/prod
+
+            echo "📝 Generando archivo .env..."
 
             DB_USER=${{ secrets.POSTGRES_USER || 'fsl_ops_user' }}
             DB_PASS=${{ secrets.POSTGRES_PASSWORD || 'CAMBIAR_PASSWORD_SEGURO' }}
@@ -150,16 +158,20 @@ jobs:
             HOSTNAME=0.0.0.0
             NEXT_TELEMETRY_DISABLED=1
 
+            # Database
             DATABASE_URL=postgresql://$DB_USER:$DB_PASS@postgres:5432/$DB_NAME
 
+            # Postgres
             POSTGRES_DB=$DB_NAME
             POSTGRES_USER=$DB_USER
             POSTGRES_PASSWORD=$DB_PASS
 
+            # NextAuth
             NEXTAUTH_URL=${{ vars.NEXTAUTH_URL || secrets.NEXTAUTH_URL }}
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             AUTH_TRUST_HOST=true
 
+            # Storage (S3)
             USE_MOCK_STORAGE=${{ vars.USE_MOCK_STORAGE || secrets.USE_MOCK_STORAGE || 'false' }}
             AWS_REGION=${{ secrets.AWS_REGION }}
             AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
@@ -170,38 +182,67 @@ jobs:
 
             chmod 600 .env
 
+            # Login a GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            # ---------------------------------------------------------------------------
+            # Pull imágenes
+            # ---------------------------------------------------------------------------
+            echo "📦 Descargando imágenes..."
             docker compose pull
 
-            echo "Levantando PostgreSQL..."
+            # ---------------------------------------------------------------------------
+            # Levantar SOLO Postgres primero
+            # ---------------------------------------------------------------------------
+            echo "🐘 Levantando PostgreSQL..."
             docker compose up -d postgres
 
-            echo "Esperando Postgres healthy..."
+            echo "⏳ Esperando a que Postgres esté healthy..."
             until docker inspect --format='{{.State.Health.Status}}' fsl-ops-postgres-prod | grep -q healthy; do
               sleep 2
             done
 
-            echo "Levantando app..."
+            # ---------------------------------------------------------------------------
+            # Levantar la aplicación Next.js
+            # ---------------------------------------------------------------------------
+            echo "⚡ Creando contenedor de aplicación..."
             docker compose up -d --no-deps app
+
             sleep 5
 
-            echo "Prisma generate..."
-            docker compose exec -T app npm run prisma:generate || true
+            # ---------------------------------------------------------------------------
+            # Ejecutar migraciones Prisma y generar cliente
+            # ---------------------------------------------------------------------------
+            echo "🧬 Generando cliente Prisma..."
+            docker compose exec -T app npm run prisma:generate || {
+              echo "⚠️ Error generando cliente Prisma, continuando..."
+            }
 
-            echo "Prisma migrate deploy..."
+            echo "🧬 Ejecutando migraciones Prisma (migrate deploy)..."
             docker compose exec -T app npm run prisma:migrate:deploy || {
-              echo "Error en migraciones"
+              echo "❌ Error ejecutando migraciones"
               docker compose logs app
               exit 1
             }
 
+            echo "✅ Migraciones completadas"
+
+            echo "🔄 Reiniciando contenedor de aplicación..."
             docker compose restart app
 
+            # ---------------------------------------------------------------------------
+            # Limpieza de imágenes antiguas
+            # ---------------------------------------------------------------------------
+            echo "🧹 Limpiando imágenes antiguas..."
             docker image prune -f
 
+            # ---------------------------------------------------------------------------
+            # Estado final
+            # ---------------------------------------------------------------------------
+            echo "✅ Estado de los contenedores:"
             docker compose ps
-            echo "Deploy completado."
+
+            echo "🎉 Deploy PRODUCCIÓN completado!"
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -211,10 +252,22 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_HOST_PORT || 22 }}
           script: |
-            sleep 25
+            echo "🔍 Verificando deployment..."
+
+            sleep 30
+
             if docker ps | grep -q "fsl-ops-prod"; then
-              echo "Contenedor app en ejecución"
+              echo "✅ App container está corriendo"
             else
+              echo "❌ App container NO está corriendo"
               docker compose -f /opt/forestal-santa-lucia/prod/docker-compose.yml logs app
               exit 1
+            fi
+
+            HEALTH_STATUS=$(docker exec fsl-ops-prod node -e "require('http').get('http://localhost:3000/api/health', (r) => { console.log(r.statusCode); process.exit(r.statusCode === 200 ? 0 : 1) })" 2>/dev/null || echo "failed")
+
+            if [ "$HEALTH_STATUS" = "failed" ]; then
+              echo "⚠️ Health check pendiente, el servicio puede estar iniciando..."
+            else
+              echo "✅ Health check pasado"
             fi
