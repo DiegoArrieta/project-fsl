@@ -6,6 +6,20 @@
 # =============================================================================
 
 services:
+  # One-shot: solo `docker compose --profile migration run --rm migrate` (no forma parte del `up` habitual).
+  migrate:
+    image: ghcr.io/${GITHUB_OWNER}/${GITHUB_REPO}/ops-platform-migrate:prod
+    profiles:
+      - migration
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fsl-ops-network
+
   app:
     image: ghcr.io/${GITHUB_OWNER}/${GITHUB_REPO}/ops-platform:prod
     container_name: fsl-ops-prod

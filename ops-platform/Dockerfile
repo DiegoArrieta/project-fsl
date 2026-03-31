@@ -79,16 +79,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.js ./prisma.config.js
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 
-# Next standalone solo incluye node_modules recortado; Prisma CLI encadena muchas deps hoisteadas
-# (effect→fast-check, proper-lockfile→graceful-fs, …). Fusionar el árbol completo de `npm ci`
-# (stage deps) evita MODULE_NOT_FOUND sin mantener listas manuales. Trade-off: imagen más grande
-# al incluir también devDependencies del lockfile (ESLint, Prettier, TypeScript, etc.).
-RUN --mount=from=deps,source=/app/node_modules,target=/deps_nm \
-    set -eu && \
-    mkdir -p ./node_modules && \
-    cp -a /deps_nm/. ./node_modules/ && \
-    chown -R nextjs:nodejs ./node_modules
-RUN chmod +x ./node_modules/.bin/* 2>/dev/null || true
+# Migraciones: imagen dedicada Dockerfile.migrate + `docker compose run --rm migrate`.
+# El cliente Prisma va en el bundle standalone (ver outputFileTracingIncludes en next.config).
 
 USER nextjs
 

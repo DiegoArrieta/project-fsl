@@ -1,0 +1,22 @@
+# =============================================================================
+# Forestal Santa Lucía — ops-platform: solo Prisma migrate (one-shot)
+# =============================================================================
+# Build: docker build -f ops-platform/Dockerfile.migrate -t fsl-ops-migrate ops-platform
+# Ejecución: docker compose run --rm migrate
+# =============================================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl
+
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+COPY prisma ./prisma/
+COPY prisma.config.js ./
+
+RUN npm ci --omit=dev
+
+CMD ["npx", "prisma", "migrate", "deploy"]

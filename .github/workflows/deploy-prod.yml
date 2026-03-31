@@ -16,9 +16,14 @@ on:
       - main
   workflow_dispatch: # Permite ejecución manual
 
+concurrency:
+  group: forestal-santa-lucia-deploy-prod
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/ops-platform
+  IMAGE_NAME_MIGRATE: ${{ github.repository }}/ops-platform-migrate
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -40,9 +45,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Lowercase image name
+      - name: Lowercase image names
         run: |
           echo "IMAGE_NAME_LC=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME_MIGRATE_LC=$(echo ${{ env.IMAGE_NAME_MIGRATE }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,7 +60,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Extract metadata for Docker (app)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -64,8 +70,18 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=prod-
 
+      - name: Extract metadata for Docker (migrate)
+        id: meta_migrate
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MIGRATE_LC }}
+          tags: |
+            type=raw,value=prod
+            type=raw,value=latest
+            type=sha,prefix=prod-
+
       # Build: contexto ops-platform (Dockerfile en ops-platform/)
-      - name: Build and push Docker image
+      - name: Build and push app image
         id: build
         uses: docker/build-push-action@v5
         with:
@@ -74,6 +90,19 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Build and push migrate image
+        id: build_migrate
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ops-platform
+          file: ./ops-platform/Dockerfile.migrate
+          push: true
+          tags: ${{ steps.meta_migrate.outputs.tags }}
+          labels: ${{ steps.meta_migrate.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -203,32 +232,25 @@ jobs:
             done
 
             # ---------------------------------------------------------------------------
-            # Levantar la aplicación Next.js
+            # Migraciones: contenedor dedicado (ops-platform-migrate), una ejecución a la vez (flock)
             # ---------------------------------------------------------------------------
-            echo "⚡ Creando contenedor de aplicación..."
-            docker compose up -d --no-deps app
+            MIGRATE_LOCK="/opt/forestal-santa-lucia/prod/.migrate.lock"
+            touch "$MIGRATE_LOCK"
 
-            sleep 5
-
-            # ---------------------------------------------------------------------------
-            # Ejecutar migraciones Prisma y generar cliente
-            # ---------------------------------------------------------------------------
-            echo "🧬 Generando cliente Prisma..."
-            docker compose exec -T app npm run prisma:generate || {
-              echo "⚠️ Error generando cliente Prisma, continuando..."
-            }
-
-            echo "🧬 Ejecutando migraciones Prisma (migrate deploy)..."
-            docker compose exec -T app npm run prisma:migrate:deploy || {
+            echo "🧬 Ejecutando migraciones Prisma (imagen dedicada, lock exclusivo)..."
+            if ! flock "$MIGRATE_LOCK" docker compose --profile migration run --rm migrate; then
               echo "❌ Error ejecutando migraciones"
-              docker compose logs app
+              docker compose logs app 2>/dev/null || true
               exit 1
-            }
+            fi
 
             echo "✅ Migraciones completadas"
 
-            echo "🔄 Reiniciando contenedor de aplicación..."
-            docker compose restart app
+            # ---------------------------------------------------------------------------
+            # Levantar la aplicación Next.js (cliente Prisma ya incluido en el build standalone)
+            # ---------------------------------------------------------------------------
+            echo "⚡ Levantando aplicación..."
+            docker compose up -d --no-deps app
 
             # ---------------------------------------------------------------------------
             # Limpieza de imágenes antiguas
