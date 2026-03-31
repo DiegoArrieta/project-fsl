@@ -1,32 +1,29 @@
-import { auth } from '@/lib/auth'
+import NextAuth from 'next-auth'
+import authConfig from '@/lib/auth.config'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  const session = await auth()
+const { auth } = NextAuth(authConfig)
 
-  // Rutas públicas
+export default auth((req) => {
+  const session = req.auth
   const publicPaths = ['/login']
-  const isPublicPath = publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))
+  const isPublicPath = publicPaths.some((path) => req.nextUrl.pathname.startsWith(path))
 
-  // Si está en ruta pública, permitir acceso
   if (isPublicPath) {
-    // Si ya está autenticado y trata de acceder a login, redirigir a dashboard
-    if (session && request.nextUrl.pathname === '/login') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+    if (session?.user && req.nextUrl.pathname === '/login') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
     }
     return NextResponse.next()
   }
 
-  // Si no está autenticado y trata de acceder a ruta protegida, redirigir a login
-  if (!session) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname)
+  if (!session?.user) {
+    const loginUrl = new URL('/login', req.url)
+    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: [
@@ -41,9 +38,3 @@ export const config = {
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-
-
-
-
-
-
