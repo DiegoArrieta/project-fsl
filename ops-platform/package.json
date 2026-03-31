@@ -1,6 +1,6 @@
 {
   "name": "ops-platform",
-  "version": "0.1.0",
+  "version": "0.1.1-SNAPSHOT.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -15,7 +15,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
-    "db:triggers": "node scripts/ejecutar-triggers-nuevas-tablas.js"
+    "db:triggers": "node scripts/ejecutar-triggers-nuevas-tablas.js",
+    "release": "standard-version"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -72,6 +73,7 @@
     "eslint-config-prettier": "^10.1.8",
     "pdfkit": "^0.17.2",
     "prettier": "^3.8.1",
+    "standard-version": "9.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
