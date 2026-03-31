@@ -84,6 +84,20 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/p
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/.bin ./node_modules/.bin
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/dotenv ./node_modules/dotenv
+# Prisma CLI (@prisma/dev, @prisma/config) resuelve muchas dependencias en la raíz de node_modules;
+# sin ellas: "Cannot find module 'valibot'" al ejecutar prisma generate / migrate en runtime.
+RUN --mount=from=deps,source=/app/node_modules,target=/deps_nm \
+    set -eu && \
+    for name in \
+      valibot hono pathe remeda foreground-child get-port-please http-status-codes \
+      proper-lockfile std-env zeptomatch mysql2 postgres c12 deepmerge-ts effect empathic; \
+    do \
+      if [ -e "/deps_nm/$name" ]; then cp -a "/deps_nm/$name" ./node_modules/; fi; \
+    done && \
+    if [ -d /deps_nm/@electric-sql ]; then cp -a /deps_nm/@electric-sql ./node_modules/; fi && \
+    if [ -d /deps_nm/@hono ]; then cp -a /deps_nm/@hono ./node_modules/; fi && \
+    if [ -d /deps_nm/@mrleebo ]; then cp -a /deps_nm/@mrleebo ./node_modules/; fi && \
+    chown -R nextjs:nodejs ./node_modules
 RUN chmod +x ./node_modules/.bin/* 2>/dev/null || true
 
 USER nextjs
