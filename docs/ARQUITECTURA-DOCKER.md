@@ -125,10 +125,15 @@ Archivo: `.github/workflows/deploy-prod.yml`
    - Etiquetas: `prod`, `latest`, `prod-<sha>`.
    - Caché Buildx tipo GHA.
 3. **Job `deploy`** (entorno **`production`** en GitHub):
-   - Copia `deploy/prod/docker-compose.yml` al VPS (`appleboy/scp-action`).
-   - Por SSH: crea directorio si hace falta, escribe `.env`, `docker login ghcr.io`, `compose pull`, levanta **Postgres**, espera healthy, levanta **app**, ejecuta `npm run prisma:generate` y `npm run prisma:migrate:deploy`, **reinicia** la app, `docker image prune -f`.
+   - **SSH previo**: `sudo mkdir` y `chown` en `/opt/forestal-santa-lucia/prod` (el `scp-action` no usa sudo; sin esto el usuario SSH no puede crear rutas bajo `/opt`).
+   - Copia `deploy/prod/docker-compose.yml` al VPS (`appleboy/scp-action`, con `overwrite: true` para redeploys).
+   - Por SSH: escribe `.env`, `docker login ghcr.io`, `compose pull`, levanta **Postgres**, espera healthy, levanta **app**, ejecuta `npm run prisma:generate` y `npm run prisma:migrate:deploy`, **reinicia** la app, `docker image prune -f`.
 
 Para que el deploy funcione, en GitHub deben existir (como mínimo) secretos típicos: acceso SSH al VPS, credenciales de Postgres, `NEXTAUTH_SECRET`, y la URL pública en variable o secreto (`NEXTAUTH_URL`). El workflow documentado en el YAML detalla nombres sugeridos.
+
+**Requisito en el VPS:** el usuario definido en `VPS_USER` debe poder ejecutar sin contraseña, al menos:
+
+`sudo mkdir`, `sudo chown` bajo `/opt/forestal-santa-lucia`, y los comandos habituales de Docker si el usuario no es root (grupo `docker` o sudo para `docker compose`).
 
 ## Generación de PDF en contenedor
 

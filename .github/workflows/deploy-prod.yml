@@ -97,6 +97,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # SCP no usa sudo: si /opt no es escribible por el usuario SSH, falla antes de cualquier otro paso.
+      # Este paso debe existir y el usuario VPS necesita sudo sin contraseña para mkdir/chown en esta ruta.
+      - name: Crear directorio de deploy en VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_HOST_PORT || 22 }}
+          script: |
+            sudo mkdir -p /opt/forestal-santa-lucia/prod
+            sudo chown -R "$(whoami):$(whoami)" /opt/forestal-santa-lucia/prod
+
       - name: Copy docker-compose to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -107,6 +120,7 @@ jobs:
           source: "deploy/prod/docker-compose.yml"
           target: "/opt/forestal-santa-lucia/prod/"
           strip_components: 2
+          overwrite: true
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
