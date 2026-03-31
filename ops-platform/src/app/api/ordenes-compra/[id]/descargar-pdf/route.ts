@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generarPDFOrdenCompra } from '@/lib/ordenes-compra/pdf'
+import { ordenCompraLineasConTipoPalletDetalle } from '@/lib/ordenes-compra/prisma-includes'
+import { formatTipoPalletAtributosLineaDesdeInput } from '@/lib/tipos-pallet/orden-compra-catalogo'
 
 /**
  * GET /api/ordenes-compra/[id]/descargar-pdf
@@ -18,11 +20,7 @@ export async function GET(
       where: { id },
       include: {
         proveedor: true,
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        ...ordenCompraLineasConTipoPalletDetalle,
       },
     })
 
@@ -65,19 +63,38 @@ export async function GET(
         telefono: ordenCompra.proveedor.telefono || undefined,
         email: ordenCompra.proveedor.email || undefined,
       },
-      productos: ordenCompra.lineas.map((linea) => ({
-        tipoPallet: {
-          codigo: linea.tipoPallet.codigo,
-          nombre: linea.tipoPallet.nombre,
-        },
-        cantidad: linea.cantidad,
-        precioUnitario: linea.precioUnitario ? Number(linea.precioUnitario) : undefined,
-        descripcion: linea.descripcion || undefined,
-      })),
+      productos: ordenCompra.lineas.map((linea) => {
+        const tp = linea.tipoPallet
+        const partesDesc: string[] = []
+        if (linea.descripcion?.trim()) partesDesc.push(linea.descripcion.trim())
+        if (
+          tp.categoria?.nombre &&
+          typeof tp.requiereCertificacion === 'boolean' &&
+          Array.isArray(tp.paises)
+        ) {
+          partesDesc.push(
+            formatTipoPalletAtributosLineaDesdeInput({
+              categoria: tp.categoria,
+              dimensiones: tp.dimensiones ?? null,
+              requiereCertificacion: tp.requiereCertificacion,
+              paises: tp.paises,
+            })
+          )
+        }
+        return {
+          tipoPallet: {
+            codigo: linea.tipoPallet.codigo,
+            nombre: linea.tipoPallet.nombre,
+          },
+          cantidad: linea.cantidad,
+          precioUnitario: linea.precioUnitario ? Number(linea.precioUnitario) : undefined,
+          descripcion: partesDesc.length ? partesDesc.join(' · ') : undefined,
+        }
+      }),
     }
 
     // Generar PDF
-    const pdfBlob = generarPDFOrdenCompra(datosPDF)
+    const pdfBlob = await generarPDFOrdenCompra(datosPDF)
 
     // Convertir blob a buffer
     const buffer = Buffer.from(await pdfBlob.arrayBuffer())

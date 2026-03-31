@@ -39,7 +39,6 @@
     "date-fns": "^4.1.0",
     "formik": "^2.4.9",
     "handlebars": "^4.7.8",
-    "jspdf": "^4.0.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
     "next-auth": "^5.0.0-beta.30",

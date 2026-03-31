@@ -13,16 +13,18 @@ import { Label } from '@/components/ui/label'
 import { ArrowLeft, Plus, Trash2, Save, FileText, Package, DollarSign, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { TipoPalletSelectItemBody } from '@/components/ordenes-compra/tipo-pallet-select-item-body'
+import { TipoPalletSelectTriggerResumen } from '@/components/ordenes-compra/tipo-pallet-select-trigger-resumen'
+import {
+  fetchTiposPalletCatalogoOrdenCompra,
+  findTipoPalletCatalogoOc,
+  tipoPalletSelectTypeaheadText,
+  type TipoPalletCatalogoOc,
+} from '@/lib/tipos-pallet/orden-compra-catalogo'
 
 interface ProveedorOption {
   id: string
   razonSocial: string
-}
-
-interface TipoPalletOption {
-  id: string
-  codigo: string
-  nombre: string | null
 }
 
 interface LineaForm {
@@ -55,16 +57,6 @@ async function fetchProveedoresActivos(): Promise<ProveedorOption[]> {
   }
   const json = await response.json()
   return (json.data ?? []) as ProveedorOption[]
-}
-
-async function fetchTiposPallet(): Promise<TipoPalletOption[]> {
-  const response = await fetch('/api/tipos-pallet')
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.error || 'Error al cargar tipos de pallet')
-  }
-  const json = await response.json()
-  return (json.data ?? []) as TipoPalletOption[]
 }
 
 async function fetchOrdenCompraParaEditar(id: string): Promise<OrdenCompraApiParaEditar | null> {
@@ -108,7 +100,7 @@ interface EditarOrdenFormProps {
   ordenId: string
   orden: OrdenCompraApiParaEditar
   proveedores: ProveedorOption[]
-  tiposPallet: TipoPalletOption[]
+  tiposPallet: TipoPalletCatalogoOc[]
 }
 
 function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: EditarOrdenFormProps) {
@@ -315,7 +307,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                   <table className="w-full">
                     <thead className="bg-muted/50">
                       <tr className="border-b">
-                        <th className="text-left p-3 font-semibold">Tipo Pallet *</th>
+                        <th className="text-left p-3 font-semibold min-w-48">Pallet *</th>
                         <th className="text-left p-3 font-semibold">Cantidad *</th>
                         <th className="text-left p-3 font-semibold">Precio Unit. *</th>
                         <th className="text-left p-3 font-semibold">Subtotal</th>
@@ -323,23 +315,29 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                       </tr>
                     </thead>
                     <tbody>
-                      {formik.values.productos.map((producto, index) => (
+                      {formik.values.productos.map((producto, index) => {
+                        const tipoSel = findTipoPalletCatalogoOc(tiposPallet, producto.tipoPalletId)
+                        return (
                         <tr key={index} className="border-b hover:bg-accent/50 transition-colors">
-                          <td className="p-3">
+                          <td className="p-3 align-top">
                             <Select
                               value={producto.tipoPalletId || undefined}
                               onValueChange={(value) =>
                                 formik.setFieldValue(`productos.${index}.tipoPalletId`, value)
                               }
                             >
-                              <SelectTrigger type="button" className="w-44 min-w-[11rem]">
-                                <SelectValue placeholder="Seleccionar" />
+                              <SelectTrigger type="button" className="h-10 w-full min-w-44 max-w-md">
+                                <TipoPalletSelectTriggerResumen tipo={tipoSel} />
                               </SelectTrigger>
-                              <SelectContent className="z-200">
+                              <SelectContent className="z-200 max-h-[min(24rem,70vh)] w-[min(36rem,calc(100vw-2rem))] min-w-[var(--radix-select-trigger-width)]">
                                 {tiposPallet.map((tipo) => (
-                                  <SelectItem key={tipo.id} value={tipo.id}>
-                                    {tipo.codigo}
-                                    {tipo.nombre ? ` — ${tipo.nombre}` : ''}
+                                  <SelectItem
+                                    key={tipo.id}
+                                    value={tipo.id}
+                                    textValue={tipoPalletSelectTypeaheadText(tipo)}
+                                    className="py-1.5"
+                                  >
+                                    <TipoPalletSelectItemBody tipo={tipo} />
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -353,7 +351,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                                 </p>
                               )}
                           </td>
-                          <td className="p-3">
+                          <td className="p-3 align-top">
                             <Input
                               type="number"
                               inputMode="numeric"
@@ -368,7 +366,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                               min={1}
                             />
                           </td>
-                          <td className="p-3">
+                          <td className="p-3 align-top">
                             <Input
                               type="number"
                               inputMode="decimal"
@@ -383,10 +381,10 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                               step="0.01"
                             />
                           </td>
-                          <td className="p-3 font-semibold text-primary">
+                          <td className="p-3 align-top font-semibold text-primary">
                             ${((producto.cantidad || 0) * (producto.precioUnitario || 0)).toLocaleString('es-CL')}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center align-top">
                             <Button
                               type="button"
                               variant="ghost"
@@ -399,7 +397,8 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -490,8 +489,8 @@ export default function EditarOrdenCompraPage() {
   })
 
   const { data: tiposPallet = [], isLoading: loadingTipos, error: errorTipos } = useQuery({
-    queryKey: ['tipos-pallet'],
-    queryFn: fetchTiposPallet,
+    queryKey: ['tipos-pallet', 'orden-compra'],
+    queryFn: fetchTiposPalletCatalogoOrdenCompra,
   })
 
   const isLoadingCatalogos = loadingProveedores || loadingTipos

@@ -2,8 +2,13 @@
  * Normaliza la respuesta de la API (Prisma) para las vistas de órdenes de compra.
  */
 
+import { formatTipoPalletAtributosLineaDesdeInput } from '@/lib/tipos-pallet/orden-compra-catalogo'
+
 export interface OrdenCompraProductoUi {
+  /** Código y nombre del tipo de pallet */
   tipo: string
+  /** categoría - medidas - [NIMF 15] - países; null si faltan relaciones en la API */
+  detallePallet: string | null
   cantidad: number
   precioUnitario: number
   subtotal: number
@@ -28,7 +33,14 @@ export interface OrdenCompraUi {
 interface ApiLinea {
   cantidad: number
   precioUnitario: unknown
-  tipoPallet?: { codigo?: string | null; nombre?: string | null } | null
+  tipoPallet?: {
+    codigo?: string | null
+    nombre?: string | null
+    dimensiones?: string | null
+    requiereCertificacion?: boolean
+    categoria?: { nombre: string } | null
+    paises?: Array<{ pais: { nombre: string; codigoIso: string } }> | null
+  } | null
 }
 
 interface ApiOrdenCompra {
@@ -51,8 +63,29 @@ export function mapOrdenCompraApiToUi(api: ApiOrdenCompra): OrdenCompraUi {
   const productos: OrdenCompraProductoUi[] = lineas.map((l) => {
     const pu = l.precioUnitario != null ? Number(l.precioUnitario) : 0
     const subtotal = l.cantidad * pu
+    const tp = l.tipoPallet
+    const etiquetaTipo =
+      tp?.codigo && tp?.nombre
+        ? `${tp.codigo} — ${tp.nombre}`
+        : (tp?.codigo ?? tp?.nombre ?? '—')
+
+    let detallePallet: string | null = null
+    if (
+      tp?.categoria?.nombre &&
+      typeof tp.requiereCertificacion === 'boolean' &&
+      Array.isArray(tp.paises)
+    ) {
+      detallePallet = formatTipoPalletAtributosLineaDesdeInput({
+        categoria: tp.categoria,
+        dimensiones: tp.dimensiones ?? null,
+        requiereCertificacion: tp.requiereCertificacion,
+        paises: tp.paises,
+      })
+    }
+
     return {
-      tipo: l.tipoPallet?.codigo ?? l.tipoPallet?.nombre ?? '—',
+      tipo: etiquetaTipo,
+      detallePallet,
       cantidad: l.cantidad,
       precioUnitario: pu,
       subtotal,

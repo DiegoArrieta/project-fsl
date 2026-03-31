@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
+import { ordenCompraLineasConTipoPalletDetalle } from '@/lib/ordenes-compra/prisma-includes'
 import { createOrdenCompraSchema } from '@/lib/validations/orden-compra'
 import { generarNumeroOrdenCompra } from '@/lib/ordenes-compra/numero'
 
@@ -49,11 +50,7 @@ export async function GET(request: NextRequest) {
       include: {
         proveedor: true,
         operacion: true,
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        ...ordenCompraLineasConTipoPalletDetalle,
       },
       orderBy: {
         createdAt: 'desc',
@@ -128,11 +125,7 @@ export async function POST(request: NextRequest) {
       include: {
         proveedor: true,
         operacion: true,
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        ...ordenCompraLineasConTipoPalletDetalle,
       },
     })
 

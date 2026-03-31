@@ -206,7 +206,14 @@ export default function OrdenCompraDetallePage() {
               <tbody>
                 {oc.productos.map((producto, idx) => (
                   <tr key={`${producto.tipo}-${idx}`} className="border-b">
-                    <td className="p-2">{producto.tipo}</td>
+                    <td className="p-2">
+                      <div className="flex max-w-xl flex-col gap-1">
+                        <span className="font-medium">{producto.tipo}</span>
+                        {producto.detallePallet ? (
+                          <span className="text-sm text-muted-foreground">{producto.detallePallet}</span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="p-2">{producto.cantidad}</td>
                     <td className="p-2">${producto.precioUnitario.toLocaleString('es-CL')}</td>
                     <td className="p-2">${producto.subtotal.toLocaleString('es-CL')}</td>
