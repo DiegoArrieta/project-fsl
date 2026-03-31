@@ -34,8 +34,12 @@ interface PresupuestoFormProps {
   isLoading?: boolean
 }
 
+/**
+ * Listado para el select: sin filtrar por `activo`, igual que en Contactos cuando no aplica filtro.
+ * Así aparecen clientes aunque estén dados de baja (útil para repr. o datos históricos).
+ */
 async function fetchClientes() {
-  const params = new URLSearchParams({ activo: 'true', pageSize: '500', page: '1' })
+  const params = new URLSearchParams({ pageSize: '500', page: '1' })
   const response = await fetch(`/api/clientes?${params}`, { credentials: 'include' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -71,7 +75,7 @@ export function PresupuestoForm({
     error: errorClientes,
     refetch: refetchClientes,
   } = useQuery({
-    queryKey: ['clientes', 'presupuesto-form', 'activos'],
+    queryKey: ['clientes', 'presupuesto-form', 'selector'],
     queryFn: fetchClientes,
   })
 
@@ -200,7 +204,7 @@ export function PresupuestoForm({
                         </Select>
                         {clientes.length === 0 ? (
                           <p className="text-sm text-muted-foreground mt-2">
-                            No hay clientes activos. Cree uno en Contactos antes de generar un presupuesto.
+                            No hay clientes en el sistema. Cree uno en Contactos antes de generar un presupuesto.
                           </p>
                         ) : null}
                         <FormMessage />
