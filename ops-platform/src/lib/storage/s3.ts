@@ -13,6 +13,11 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { IStorageProvider, UploadResult, UploadDocumentOptions } from './types'
 
+/** Segmento raíz del objeto en S3: local (desarrollo) vs prod (NODE_ENV=production). */
+function getS3EnvironmentSegment(): 'local' | 'prod' {
+  return process.env.NODE_ENV === 'production' ? 'prod' : 'local'
+}
+
 function sanitizeFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? 'file'
   return base.replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 200) || 'file'
@@ -69,9 +74,10 @@ export class S3StorageProvider implements IStorageProvider {
     contentType: string,
     options?: UploadDocumentOptions
   ): Promise<UploadResult> {
-    const prefix = (options?.keyPrefix ?? 'general').replace(/^\/+|\/+$/g, '')
+    const logicalPrefix = (options?.keyPrefix ?? 'general').replace(/^\/+|\/+$/g, '')
     const safe = sanitizeFilename(filename)
-    const key = `${prefix}/${randomUUID()}-${safe}`
+    const envRoot = getS3EnvironmentSegment()
+    const key = `${envRoot}/${logicalPrefix}/${randomUUID()}-${safe}`
 
     await this.client.send(
       new PutObjectCommand({
