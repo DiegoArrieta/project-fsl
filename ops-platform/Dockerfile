@@ -89,8 +89,8 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/dotenv ./node_modules/d
 RUN --mount=from=deps,source=/app/node_modules,target=/deps_nm \
     set -eu && \
     for name in \
-      valibot hono pathe remeda foreground-child get-port-please http-status-codes \
-      proper-lockfile std-env zeptomatch mysql2 postgres c12 deepmerge-ts effect empathic; \
+      valibot hono pathe remeda foreground-child get-port-please grammex graphmatch \
+      http-status-codes proper-lockfile std-env zeptomatch mysql2 postgres c12 deepmerge-ts effect empathic; \
     do \
       if [ -e "/deps_nm/$name" ]; then cp -a "/deps_nm/$name" ./node_modules/; fi; \
     done && \
