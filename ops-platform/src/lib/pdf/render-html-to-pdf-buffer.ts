@@ -15,7 +15,7 @@ export async function renderHtmlToPdfBuffer(html: string): Promise<Buffer> {
       format: 'A4',
       printBackground: true,
       margin: {
-        top: '20mm',
+        top: '24px',
         right: '15mm',
         bottom: '20mm',
         left: '15mm',

@@ -18,12 +18,38 @@ export function getDocumentoPdfBaseStyles(): string {
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       margin-bottom: 30px;
       padding-bottom: 20px;
       border-bottom: 2px solid #2d5016;
     }
-    .logo {
+    .cabecera-doc {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #2d5016;
+    }
+    .cabecera-doc .header {
+      align-items: center;
+      margin-bottom: 0;
+      padding-bottom: 16px;
+      border-bottom: none;
+    }
+    .cabecera-doc .empresa-emisor {
+      margin-bottom: 0;
+      margin-top: 0;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+    }
+    .logo-img {
+      width: 150px;
+      height: 150px;
+      display: block;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .logo.logo--text {
       font-size: 22px;
       font-weight: bold;
       color: #2d5016;
@@ -66,6 +92,25 @@ export function getDocumentoPdfBaseStyles(): string {
       color: #2d5016;
       margin-bottom: 10px;
     }
+    .counterparty-dual {
+      display: flex;
+      align-items: stretch;
+      margin-bottom: 30px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+      border-left: 4px solid #2d5016;
+      gap: 22px;
+    }
+    .counterparty-dual .counterparty-section {
+      flex: 1;
+      min-width: 0;
+      margin-bottom: 0;
+      padding: 0;
+      background-color: transparent;
+      border: none;
+      border-radius: 0;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -97,6 +142,23 @@ export function getDocumentoPdfBaseStyles(): string {
       margin-top: 4px;
       display: block;
       line-height: 1.4;
+    }
+    .producto-cell {
+      min-width: 0;
+    }
+    .producto-codigo-nombre {
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #2d5016;
+      font-size: 12px;
+    }
+    .producto-comentario {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #ccc;
+      font-size: 11px;
+      color: #333;
+      line-height: 1.45;
     }
     .totals {
       margin-top: 20px;

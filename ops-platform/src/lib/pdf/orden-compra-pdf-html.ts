@@ -1,5 +1,6 @@
 import Handlebars from 'handlebars'
 import type { DatosOrdenCompraPdf } from '@/lib/ordenes-compra/pdf-types'
+import { getEmpresaPdfLogoDataUrl } from './empresa-logo-data-url'
 import { getDocumentoPdfBaseStyles, getPdfFooterText } from './documento-pdf-styles'
 
 function formatearRut(rut: string): string {
@@ -32,24 +33,30 @@ const ORDEN_COMPRA_TEMPLATE = `<!DOCTYPE html>
   <style>{{{styles}}}</style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <div class="logo">🌲 Forestal Santa Lucía SpA</div>
-      <div class="empresa-emisor">
-        <div><strong>{{empresa.razonSocial}}</strong></div>
-        <div>RUT: {{empresa.rut}}</div>
-        {{#if empresa.direccion}}<div>{{empresa.direccion}}</div>{{/if}}
-        {{#if empresa.telefono}}<div>Tel: {{empresa.telefono}}</div>{{/if}}
-        {{#if empresa.email}}<div>Email: {{empresa.email}}</div>{{/if}}
+  <div class="cabecera-doc">
+    <div class="header">
+      <div class="header-brand">
+        {{#if logoDataUrl}}
+        <img src="{{{logoDataUrl}}}" alt="Forestal Santa Lucía SpA" class="logo-img" />
+        {{else}}
+        <div class="logo logo--text">🌲 Forestal Santa Lucía SpA</div>
+        {{/if}}
+      </div>
+      <div class="header-info">
+        <h1>{{tituloDocumento}}</h1>
+        <div><strong>N°:</strong> {{numero}}</div>
+        <div><strong>Fecha:</strong> {{fecha}}</div>
+        {{#if fechaEntrega}}
+        <div><strong>Fecha entrega:</strong> {{fechaEntrega}}</div>
+        {{/if}}
       </div>
     </div>
-    <div class="header-info">
-      <h1>{{tituloDocumento}}</h1>
-      <div><strong>N°:</strong> {{numero}}</div>
-      <div><strong>Fecha:</strong> {{fecha}}</div>
-      {{#if fechaEntrega}}
-      <div><strong>Fecha entrega:</strong> {{fechaEntrega}}</div>
-      {{/if}}
+    <div class="empresa-emisor">
+      <div><strong>{{empresa.razonSocial}}</strong></div>
+      <div>RUT: {{empresa.rut}}</div>
+      {{#if empresa.direccion}}<div>{{empresa.direccion}}</div>{{/if}}
+      {{#if empresa.telefono}}<div>Tel: {{empresa.telefono}}</div>{{/if}}
+      {{#if empresa.email}}<div>Email: {{empresa.email}}</div>{{/if}}
     </div>
   </div>
 
@@ -142,9 +149,11 @@ export function buildOrdenCompraPdfHtml(datos: DatosOrdenCompraPdf): string {
 
   const compile = Handlebars.compile(ORDEN_COMPRA_TEMPLATE)
   const footer = getPdfFooterText()
+  const logoDataUrl = getEmpresaPdfLogoDataUrl()
 
   return compile({
     styles: getDocumentoPdfBaseStyles(),
+    logoDataUrl,
     tituloDocumento: 'Orden de compra',
     numero: datos.numero,
     fecha: fechaLarga(datos.fecha),

@@ -1,7 +1,17 @@
 import Handlebars from 'handlebars'
 import { prisma } from '@/lib/db'
+import { getEmpresaPdfLogoDataUrl } from '@/lib/pdf/empresa-logo-data-url'
+import { PRESUPUESTO_PDF_EMISOR_DATOS } from '@/lib/pdf/presupuesto-emisor-datos'
 import { getDocumentoPdfBaseStyles, getPdfFooterText } from '@/lib/pdf/documento-pdf-styles'
 import { renderHtmlToPdfBuffer } from '@/lib/pdf/render-html-to-pdf-buffer'
+import { ETIQUETA_LINEA_CERTIFICACION_PALLET } from '@/lib/tipos-pallet/orden-compra-catalogo'
+
+function textoPaisesLineaPresupuesto(
+  paises: Array<{ pais: { nombre: string; codigoIso: string } }> | null | undefined
+): string {
+  if (!paises?.length) return '—'
+  return paises.map((x) => x.pais.nombre || x.pais.codigoIso).join(', ')
+}
 
 /**
  * Servicio para generar PDFs de presupuestos (HTML + Handlebars + Puppeteer).
@@ -18,7 +28,12 @@ export class PDFService {
         cliente: true,
         lineas: {
           include: {
-            tipoPallet: true,
+            tipoPallet: {
+              include: {
+                categoria: true,
+                paises: { include: { pais: true } },
+              },
+            },
           },
         },
       },
@@ -28,15 +43,44 @@ export class PDFService {
       throw new Error('Presupuesto no encontrado')
     }
 
+    const lineas = presupuesto.lineas.map((linea, index) => {
+      const tp = linea.tipoPallet
+      const comentario = (linea.descripcion ?? '').trim()
+      return {
+        numero: index + 1,
+        codigo: tp.codigo,
+        nombre: tp.nombre,
+        categoria: tp.categoria?.nombre ?? '—',
+        dimensiones: tp.dimensiones?.trim() || '—',
+        nimf15: Boolean(tp.requiereCertificacion),
+        etiquetaNimf: ETIQUETA_LINEA_CERTIFICACION_PALLET,
+        paises: textoPaisesLineaPresupuesto(tp.paises),
+        comentario,
+        cantidad: linea.cantidad,
+        precioUnitario: linea.precioUnitario.toNumber().toLocaleString('es-CL', {
+          style: 'currency',
+          currency: 'CLP',
+        }),
+        total: linea.precioUnitario.mul(linea.cantidad).toNumber().toLocaleString('es-CL', {
+          style: 'currency',
+          currency: 'CLP',
+        }),
+      }
+    })
+
+    const logoDataUrl = getEmpresaPdfLogoDataUrl()
+
     const templateData = {
       styles: getDocumentoPdfBaseStyles(),
       footer: getPdfFooterText(),
+      logoDataUrl,
       numero: presupuesto.numero,
       fecha: presupuesto.fecha.toLocaleDateString('es-CL', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       }),
+      emisora: { ...PRESUPUESTO_PDF_EMISOR_DATOS },
       cliente: {
         razonSocial: presupuesto.cliente.razonSocial,
         rut: presupuesto.cliente.rut,
@@ -48,20 +92,7 @@ export class PDFService {
       direccion: presupuesto.direccion,
       ciudad: presupuesto.ciudad,
       observaciones: presupuesto.observaciones,
-      lineas: presupuesto.lineas.map((linea, index) => ({
-        numero: index + 1,
-        tipoPallet: linea.tipoPallet.nombre,
-        cantidad: linea.cantidad,
-        precioUnitario: linea.precioUnitario.toNumber().toLocaleString('es-CL', {
-          style: 'currency',
-          currency: 'CLP',
-        }),
-        total: linea.precioUnitario.mul(linea.cantidad).toNumber().toLocaleString('es-CL', {
-          style: 'currency',
-          currency: 'CLP',
-        }),
-        descripcion: linea.descripcion || '',
-      })),
+      lineas,
       subtotal: presupuesto.subtotal.toNumber().toLocaleString('es-CL', {
         style: 'currency',
         currency: 'CLP',
@@ -95,7 +126,13 @@ export class PDFService {
 </head>
 <body>
   <div class="header">
-    <div class="logo">🌲 Forestal Santa Lucía SpA</div>
+    <div class="header-brand">
+      {{#if logoDataUrl}}
+      <img src="{{{logoDataUrl}}}" alt="Forestal Santa Lucía SpA" class="logo-img" />
+      {{else}}
+      <div class="logo logo--text">🌲 Forestal Santa Lucía SpA</div>
+      {{/if}}
+    </div>
     <div class="header-info">
       <h1>Presupuesto</h1>
       <div><strong>N°:</strong> {{numero}}</div>
@@ -103,22 +140,33 @@ export class PDFService {
     </div>
   </div>
 
-  <div class="counterparty-section">
-    <h2>Cliente</h2>
-    <div><strong>{{cliente.razonSocial}}</strong></div>
-    <div>RUT: {{cliente.rut}}</div>
-    {{#if cliente.direccion}}
-    <div>{{cliente.direccion}}</div>
-    {{/if}}
-    {{#if cliente.ciudad}}
-    <div>{{cliente.ciudad}}</div>
-    {{/if}}
-    {{#if cliente.telefono}}
-    <div>Tel: {{cliente.telefono}}</div>
-    {{/if}}
-    {{#if cliente.email}}
-    <div>Email: {{cliente.email}}</div>
-    {{/if}}
+  <div class="counterparty-dual">
+    <div class="counterparty-section counterparty-section--emisora">
+      <h2>Empresa</h2>
+      <div><strong>{{emisora.nombre}}</strong></div>
+      <div>RUT: {{emisora.rut}}</div>
+      <div>{{emisora.tema}}</div>
+      <div>{{emisora.direccion}}</div>
+      <div>Tel: {{emisora.fono}}</div>
+      <div>Email: {{emisora.email}}</div>
+    </div>
+    <div class="counterparty-section counterparty-section--cliente">
+      <h2>Cliente</h2>
+      <div><strong>{{cliente.razonSocial}}</strong></div>
+      <div>RUT: {{cliente.rut}}</div>
+      {{#if cliente.direccion}}
+      <div>{{cliente.direccion}}</div>
+      {{/if}}
+      {{#if cliente.ciudad}}
+      <div>{{cliente.ciudad}}</div>
+      {{/if}}
+      {{#if cliente.telefono}}
+      <div>Tel: {{cliente.telefono}}</div>
+      {{/if}}
+      {{#if cliente.email}}
+      <div>Email: {{cliente.email}}</div>
+      {{/if}}
+    </div>
   </div>
 
   {{#if direccion}}
@@ -139,23 +187,34 @@ export class PDFService {
   <table>
     <thead>
       <tr>
-        <th>#</th>
-        <th>Tipo de pallet</th>
-        <th class="numeric">Cantidad</th>
-        <th class="numeric">Precio unitario</th>
-        <th class="numeric">Total</th>
-        <th>Descripción</th>
+        <th style="width:36px">#</th>
+        <th>Producto</th>
+        <th class="numeric" style="width:64px">Cantidad</th>
+        <th class="numeric" style="width:96px">Precio unitario</th>
+        <th class="numeric" style="width:96px">Total</th>
       </tr>
     </thead>
     <tbody>
       {{#each lineas}}
       <tr>
         <td>{{numero}}</td>
-        <td>{{tipoPallet}}</td>
+        <td>
+          <div class="producto-cell">
+            <div class="producto-codigo-nombre">{{codigo}} — {{nombre}}</div>
+            <div class="line-detail"><strong>Categoría:</strong> {{categoria}}</div>
+            <div class="line-detail"><strong>Dimensiones:</strong> {{dimensiones}}</div>
+            {{#if nimf15}}
+            <div class="line-detail"><strong>Certificación:</strong> {{etiquetaNimf}}</div>
+            {{/if}}
+            <div class="line-detail"><strong>País(es):</strong> {{paises}}</div>
+            {{#if comentario}}
+            <div class="producto-comentario"><strong>Comentario:</strong> {{comentario}}</div>
+            {{/if}}
+          </div>
+        </td>
         <td class="numeric">{{cantidad}}</td>
         <td class="numeric">{{precioUnitario}}</td>
         <td class="numeric">{{total}}</td>
-        <td>{{descripcion}}</td>
       </tr>
       {{/each}}
     </tbody>
