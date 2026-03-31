@@ -32,28 +32,6 @@ export async function GET(
             estado: true,
           },
         },
-        empresa: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-            contacto: true,
-            telefono: true,
-            email: true,
-          },
-        },
-        empresaReceptora: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-            contacto: true,
-            telefono: true,
-            email: true,
-          },
-        },
       },
     })
 
@@ -69,8 +47,10 @@ export async function GET(
       data: {
         id: entrega.id,
         evento: entrega.evento,
-        empresa: entrega.empresa,
-        empresaReceptora: entrega.empresaReceptora,
+        origenRazonSocial: entrega.origenRazonSocial,
+        origenRut: entrega.origenRut,
+        receptorRazonSocial: entrega.receptorRazonSocial,
+        receptorRut: entrega.receptorRut,
         fechaHora: entrega.fechaHora,
         tipoEntrega: entrega.tipoEntrega,
         descripcion: entrega.descripcion,
@@ -109,7 +89,6 @@ export async function PUT(
     const body = await request.json()
     const validatedData = entregaSchema.parse(body)
 
-    // Verificar que la entrega exista
     const existingEntrega = await prisma.entrega.findUnique({
       where: { id },
     })
@@ -121,7 +100,6 @@ export async function PUT(
       )
     }
 
-    // Verificar que el evento exista si se cambia
     if (validatedData.eventoId !== existingEntrega.eventoId) {
       const evento = await prisma.evento.findUnique({
         where: { id: validatedData.eventoId },
@@ -135,48 +113,27 @@ export async function PUT(
       }
     }
 
-    // Verificar empresas si se cambian
-    if (validatedData.empresaId !== existingEntrega.empresaId) {
-      const empresa = await prisma.empresa.findUnique({
-        where: { id: validatedData.empresaId },
-      })
-
-      if (!empresa) {
-        return NextResponse.json(
-          { success: false, error: 'Empresa no encontrada' },
-          { status: 404 }
-        )
-      }
-    }
-
-    if (validatedData.empresaReceptoraId) {
-      const empresaReceptora = await prisma.empresa.findUnique({
-        where: { id: validatedData.empresaReceptoraId },
-      })
-
-      if (!empresaReceptora) {
-        return NextResponse.json(
-          { success: false, error: 'Empresa receptora no encontrada' },
-          { status: 404 }
-        )
-      }
-    }
-
-    // Actualizar entrega
     const entrega = await prisma.entrega.update({
       where: { id },
-      data: validatedData,
+      data: {
+        eventoId: validatedData.eventoId,
+        origenRazonSocial: validatedData.origenRazonSocial.trim(),
+        origenRut: validatedData.origenRut.trim(),
+        receptorRazonSocial: validatedData.receptorRazonSocial?.trim() || null,
+        receptorRut: validatedData.receptorRut?.trim() || null,
+        fechaHora: validatedData.fechaHora,
+        tipoEntrega: validatedData.tipoEntrega,
+        descripcion: validatedData.descripcion ?? null,
+        cantidad: validatedData.cantidad,
+        unidad: validatedData.unidad,
+        estado: validatedData.estado,
+        observaciones: validatedData.observaciones ?? null,
+      },
       include: {
         evento: {
           select: {
             id: true,
             numero: true,
-          },
-        },
-        empresa: {
-          select: {
-            id: true,
-            nombre: true,
           },
         },
       },
@@ -187,7 +144,8 @@ export async function PUT(
       data: {
         id: entrega.id,
         evento: entrega.evento,
-        empresa: entrega.empresa,
+        origenRazonSocial: entrega.origenRazonSocial,
+        origenRut: entrega.origenRut,
         message: 'Entrega actualizada correctamente',
       },
     })
@@ -223,7 +181,6 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar que la entrega exista
     const entrega = await prisma.entrega.findUnique({
       where: { id },
     })
@@ -235,7 +192,6 @@ export async function DELETE(
       )
     }
 
-    // Eliminar entrega
     await prisma.entrega.delete({
       where: { id },
     })
@@ -252,4 +208,3 @@ export async function DELETE(
     )
   }
 }
-

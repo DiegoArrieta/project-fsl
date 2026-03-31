@@ -40,13 +40,6 @@ async function fetchEventos() {
   return data.data || []
 }
 
-async function fetchEmpresas() {
-  const response = await fetch('/api/empresas')
-  if (!response.ok) throw new Error('Error al cargar empresas')
-  const data = await response.json()
-  return data.data || []
-}
-
 export function EntregaForm({
   initialData,
   eventoId: initialEventoId,
@@ -59,15 +52,12 @@ export function EntregaForm({
     queryFn: fetchEventos,
   })
 
-  const { data: empresas = [] } = useQuery({
-    queryKey: ['empresas'],
-    queryFn: fetchEmpresas,
-  })
-
   const defaultValues = {
     eventoId: initialEventoId || initialData?.eventoId || '',
-    empresaId: initialData?.empresaId || '',
-    empresaReceptoraId: initialData?.empresaReceptoraId || '',
+    origenRazonSocial: initialData?.origenRazonSocial || '',
+    origenRut: initialData?.origenRut || '',
+    receptorRazonSocial: initialData?.receptorRazonSocial || '',
+    receptorRut: initialData?.receptorRut || '',
     fechaHora: initialData?.fechaHora
       ? format(
           initialData.fechaHora instanceof Date
@@ -125,7 +115,7 @@ export function EntregaForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {eventos.map((evento: any) => (
+                        {eventos.map((evento: { id: string; numero: string; tipo: string }) => (
                           <SelectItem key={evento.id} value={evento.id}>
                             {evento.numero} - {evento.tipo}
                           </SelectItem>
@@ -167,55 +157,64 @@ export function EntregaForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="empresaId"
+                name="origenRazonSocial"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Empresa Emisora <span className="text-destructive">*</span>
+                      Origen — razón social <span className="text-destructive">*</span>
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione una empresa" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {empresas.map((empresa: any) => (
-                          <SelectItem key={empresa.id} value={empresa.id}>
-                            {empresa.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Input {...field} placeholder="Ej: Forestal Andes Limitada" autoComplete="organization" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
-                name="empresaReceptoraId"
+                name="origenRut"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Empresa Receptora</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                      value={field.value || 'none'}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Opcional" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Ninguna</SelectItem>
-                        {empresas.map((empresa: any) => (
-                          <SelectItem key={empresa.id} value={empresa.id}>
-                            {empresa.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>
+                      Origen — RUT <span className="text-destructive">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="12.345.678-9" autoComplete="off" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="receptorRazonSocial"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Receptor — razón social (opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value || ''}
+                        placeholder="Opcional"
+                        autoComplete="organization"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="receptorRut"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Receptor — RUT (opcional)</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ''} placeholder="Opcional" autoComplete="off" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -364,4 +363,3 @@ export function EntregaForm({
     </Form>
   )
 }
-

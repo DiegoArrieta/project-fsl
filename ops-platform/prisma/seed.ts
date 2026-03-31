@@ -176,60 +176,6 @@ async function main() {
 
   console.log('✅ Cliente creado:', cliente.razonSocial)
 
-  // 5. Crear empresas de ejemplo
-  console.log('🏢 Creando empresas de ejemplo...')
-  
-  const empresaProveedor = await prisma.empresa.upsert({
-    where: { rut: '77442030-4' },
-    update: {},
-    create: {
-      nombre: 'FORESTAL ANDES LIMITADA',
-      rut: '77442030-4',
-      tipoEmpresa: 'PROVEEDOR',
-      contacto: 'Juan Pérez',
-      direccion: 'Camino Freire a Barros Arana KM.2',
-      telefono: '45-2378200',
-      email: 'administracion@forestalandes.cl',
-      estado: 'ACTIVA',
-    },
-  })
-
-  const empresaCliente = await prisma.empresa.upsert({
-    where: { rut: '76123456-7' },
-    update: {},
-    create: {
-      nombre: 'CERMAQ CHILE S.A.',
-      rut: '76123456-7',
-      tipoEmpresa: 'CLIENTE',
-      contacto: 'María González',
-      direccion: 'Puerto Montt',
-      telefono: '65-1234567',
-      email: 'contacto@cermaq.cl',
-      estado: 'ACTIVA',
-    },
-  })
-
-  const empresaTransportista = await prisma.empresa.upsert({
-    where: { rut: '78901234-5' },
-    update: {},
-    create: {
-      nombre: 'TRANSPORTES CUracalco S.A.',
-      rut: '78901234-5',
-      tipoEmpresa: 'TRANSPORTISTA',
-      contacto: 'Carlos Rodríguez',
-      direccion: 'Santiago',
-      telefono: '2-9876543',
-      email: 'info@curacalco.cl',
-      estado: 'ACTIVA',
-    },
-  })
-
-  console.log('✅ Empresas creadas:', {
-    proveedor: empresaProveedor.nombre,
-    cliente: empresaCliente.nombre,
-    transportista: empresaTransportista.nombre,
-  })
-
   console.log('🎉 Seed completado exitosamente!')
 }
 

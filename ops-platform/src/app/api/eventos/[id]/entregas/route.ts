@@ -18,7 +18,6 @@ export async function GET(
 
     const { id } = await params
 
-    // Verificar que el evento exista
     const evento = await prisma.evento.findUnique({
       where: { id },
     })
@@ -30,38 +29,20 @@ export async function GET(
       )
     }
 
-    // Obtener entregas del evento
     const entregas = await prisma.entrega.findMany({
       where: {
         eventoId: id,
       },
-      include: {
-        empresa: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-          },
-        },
-        empresaReceptora: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-          },
-        },
-      },
       orderBy: { fechaHora: 'desc' },
     })
 
-    // Formatear respuesta
     const data = entregas.map((entrega) => ({
       id: entrega.id,
       eventoId: entrega.eventoId,
-      empresa: entrega.empresa,
-      empresaReceptora: entrega.empresaReceptora,
+      origenRazonSocial: entrega.origenRazonSocial,
+      origenRut: entrega.origenRut,
+      receptorRazonSocial: entrega.receptorRazonSocial,
+      receptorRut: entrega.receptorRut,
       fechaHora: entrega.fechaHora,
       tipoEntrega: entrega.tipoEntrega,
       descripcion: entrega.descripcion,
@@ -85,4 +66,3 @@ export async function GET(
     )
   }
 }
-

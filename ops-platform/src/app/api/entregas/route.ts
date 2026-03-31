@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { entregaSchema } from '@/lib/validations/entrega'
@@ -17,35 +18,35 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const eventoId = searchParams.get('eventoId')
-    const empresaId = searchParams.get('empresaId')
+    const buscar = searchParams.get('buscar')?.trim() || ''
     const estado = searchParams.get('estado')
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
 
     const skip = (page - 1) * pageSize
 
-    // Construir filtros
-    const where: any = {}
+    const where: Prisma.EntregaWhereInput = {}
 
     if (eventoId) {
       where.eventoId = eventoId
     }
 
-    if (empresaId) {
+    if (buscar) {
+      const q = buscar.replace(/\./g, '')
       where.OR = [
-        { empresaId },
-        { empresaReceptoraId: empresaId },
+        { origenRazonSocial: { contains: buscar, mode: 'insensitive' } },
+        { origenRut: { contains: q, mode: 'insensitive' } },
+        { receptorRazonSocial: { contains: buscar, mode: 'insensitive' } },
+        { receptorRut: { contains: q, mode: 'insensitive' } },
       ]
     }
 
     if (estado) {
-      where.estado = estado
+      where.estado = estado as Prisma.EntregaWhereInput['estado']
     }
 
-    // Obtener total para paginación
     const total = await prisma.entrega.count({ where })
 
-    // Obtener entregas
     const entregas = await prisma.entrega.findMany({
       where,
       skip,
@@ -59,31 +60,16 @@ export async function GET(request: NextRequest) {
             tipo: true,
           },
         },
-        empresa: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-          },
-        },
-        empresaReceptora: {
-          select: {
-            id: true,
-            nombre: true,
-            tipoEmpresa: true,
-            rut: true,
-          },
-        },
       },
     })
 
-    // Formatear respuesta
     const data = entregas.map((entrega) => ({
       id: entrega.id,
       evento: entrega.evento,
-      empresa: entrega.empresa,
-      empresaReceptora: entrega.empresaReceptora,
+      origenRazonSocial: entrega.origenRazonSocial,
+      origenRut: entrega.origenRut,
+      receptorRazonSocial: entrega.receptorRazonSocial,
+      receptorRut: entrega.receptorRut,
       fechaHora: entrega.fechaHora,
       tipoEntrega: entrega.tipoEntrega,
       descripcion: entrega.descripcion,
@@ -128,7 +114,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = entregaSchema.parse(body)
 
-    // Verificar que el evento exista
     const evento = await prisma.evento.findUnique({
       where: { id: validatedData.eventoId },
     })
@@ -140,46 +125,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar que la empresa exista
-    const empresa = await prisma.empresa.findUnique({
-      where: { id: validatedData.empresaId },
-    })
-
-    if (!empresa) {
-      return NextResponse.json(
-        { success: false, error: 'Empresa no encontrada' },
-        { status: 404 }
-      )
-    }
-
-    // Verificar empresa receptora si se proporciona
-    if (validatedData.empresaReceptoraId) {
-      const empresaReceptora = await prisma.empresa.findUnique({
-        where: { id: validatedData.empresaReceptoraId },
-      })
-
-      if (!empresaReceptora) {
-        return NextResponse.json(
-          { success: false, error: 'Empresa receptora no encontrada' },
-          { status: 404 }
-        )
-      }
-    }
-
-    // Crear entrega
     const entrega = await prisma.entrega.create({
-      data: validatedData,
+      data: {
+        eventoId: validatedData.eventoId,
+        origenRazonSocial: validatedData.origenRazonSocial.trim(),
+        origenRut: validatedData.origenRut.trim(),
+        receptorRazonSocial: validatedData.receptorRazonSocial?.trim() || null,
+        receptorRut: validatedData.receptorRut?.trim() || null,
+        fechaHora: validatedData.fechaHora,
+        tipoEntrega: validatedData.tipoEntrega,
+        descripcion: validatedData.descripcion ?? null,
+        cantidad: validatedData.cantidad,
+        unidad: validatedData.unidad,
+        estado: validatedData.estado,
+        observaciones: validatedData.observaciones ?? null,
+      },
       include: {
         evento: {
           select: {
             id: true,
             numero: true,
-          },
-        },
-        empresa: {
-          select: {
-            id: true,
-            nombre: true,
           },
         },
       },
@@ -191,7 +156,8 @@ export async function POST(request: NextRequest) {
         data: {
           id: entrega.id,
           evento: entrega.evento,
-          empresa: entrega.empresa,
+          origenRazonSocial: entrega.origenRazonSocial,
+          origenRut: entrega.origenRut,
           message: 'Entrega creada correctamente',
         },
       },
@@ -212,4 +178,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

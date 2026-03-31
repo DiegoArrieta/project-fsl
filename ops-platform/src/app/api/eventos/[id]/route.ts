@@ -32,22 +32,6 @@ export async function GET(
           },
         },
         entregas: {
-          include: {
-            empresa: {
-              select: {
-                id: true,
-                nombre: true,
-                tipoEmpresa: true,
-              },
-            },
-            empresaReceptora: {
-              select: {
-                id: true,
-                nombre: true,
-                tipoEmpresa: true,
-              },
-            },
-          },
           orderBy: { fechaHora: 'desc' },
         },
         _count: {

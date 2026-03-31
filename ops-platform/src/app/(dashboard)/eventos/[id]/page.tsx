@@ -60,6 +60,12 @@ const estadoEventoLabels: Record<string, string> = {
   CANCELADO: 'Cancelado',
 }
 
+function etiquetaOrigenReceptor(nombre: string, rut?: string | null) {
+  const r = rut?.trim()
+  if (r) return `${nombre} (${r})`
+  return nombre
+}
+
 export default function EventoDetallePage() {
   const params = useParams()
   const router = useRouter()
@@ -167,9 +173,43 @@ export default function EventoDetallePage() {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {entregas.map((entrega: any) => (
-                    <EntregaCard key={entrega.id} {...entrega} />
-                  ))}
+                  {entregas.map(
+                    (entrega: {
+                      id: string
+                      fechaHora: string | Date
+                      tipoEntrega: 'COMPLETA' | 'PARCIAL' | 'DEVOLUCION' | 'OTRO'
+                      cantidad: number
+                      unidad: string
+                      estado: 'PENDIENTE' | 'EN_TRANSITO' | 'COMPLETADA' | 'RECHAZADA'
+                      origenRazonSocial: string
+                      origenRut: string
+                      receptorRazonSocial?: string | null
+                      receptorRut?: string | null
+                      descripcion?: string | null
+                      observaciones?: string | null
+                    }) => (
+                      <EntregaCard
+                        key={entrega.id}
+                        id={entrega.id}
+                        fechaHora={entrega.fechaHora}
+                        tipoEntrega={entrega.tipoEntrega}
+                        cantidad={entrega.cantidad}
+                        unidad={entrega.unidad}
+                        estado={entrega.estado}
+                        empresaNombre={etiquetaOrigenReceptor(entrega.origenRazonSocial, entrega.origenRut)}
+                        empresaReceptoraNombre={
+                          entrega.receptorRazonSocial?.trim()
+                            ? etiquetaOrigenReceptor(
+                                entrega.receptorRazonSocial,
+                                entrega.receptorRut
+                              )
+                            : null
+                        }
+                        descripcion={entrega.descripcion}
+                        observaciones={entrega.observaciones}
+                      />
+                    )
+                  )}
                 </div>
               )}
             </CardContent>

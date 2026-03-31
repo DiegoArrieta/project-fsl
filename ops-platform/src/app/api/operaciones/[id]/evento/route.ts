@@ -47,22 +47,6 @@ export async function GET(
       where: { id: operacion.eventoId },
       include: {
         entregas: {
-          include: {
-            empresa: {
-              select: {
-                id: true,
-                nombre: true,
-                tipoEmpresa: true,
-              },
-            },
-            empresaReceptora: {
-              select: {
-                id: true,
-                nombre: true,
-                tipoEmpresa: true,
-              },
-            },
-          },
           orderBy: { fechaHora: 'desc' },
         },
         _count: {

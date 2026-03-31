@@ -20,29 +20,6 @@ model Usuario {
   @@map("usuario")
 }
 
-model Empresa {
-  id                 String        @id @default(uuid()) @db.Uuid
-  nombre             String        @db.VarChar(255)
-  rut                String        @unique @db.VarChar(12)
-  tipoEmpresa        TipoEmpresa   @map("tipo_empresa")
-  contacto           String?       @db.VarChar(255)
-  direccion          String?       @db.VarChar(500)
-  telefono           String?       @db.VarChar(20)
-  email              String?       @db.VarChar(255)
-  estado             EstadoEmpresa @default(ACTIVA)
-  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
-  clientes           Cliente[]
-  entregas           Entrega[]     @relation("EmpresaEntrega")
-  entregasReceptoras Entrega[]     @relation("EmpresaReceptora")
-  proveedores        Proveedor[]
-
-  @@index([tipoEmpresa])
-  @@index([estado])
-  @@index([nombre])
-  @@map("empresa")
-}
-
 model Evento {
   id          String       @id @default(uuid()) @db.Uuid
   numero      String       @unique @db.VarChar(50)
@@ -64,26 +41,24 @@ model Evento {
 }
 
 model Entrega {
-  id                 String        @id @default(uuid()) @db.Uuid
-  eventoId           String        @map("evento_id") @db.Uuid
-  empresaId          String        @map("empresa_id") @db.Uuid
-  empresaReceptoraId String?       @map("empresa_receptora_id") @db.Uuid
-  fechaHora          DateTime      @map("fecha_hora") @db.Timestamp(6)
-  tipoEntrega        TipoEntrega   @map("tipo_entrega")
-  descripcion        String?
-  cantidad           Decimal       @db.Decimal(12, 2)
-  unidad             String        @db.VarChar(50)
-  estado             EstadoEntrega @default(PENDIENTE)
-  observaciones      String?
-  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
-  empresa            Empresa       @relation("EmpresaEntrega", fields: [empresaId], references: [id])
-  empresaReceptora   Empresa?      @relation("EmpresaReceptora", fields: [empresaReceptoraId], references: [id])
-  evento             Evento        @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(uuid()) @db.Uuid
+  eventoId            String        @map("evento_id") @db.Uuid
+  origenRazonSocial   String        @map("origen_razon_social") @db.VarChar(255)
+  origenRut           String        @map("origen_rut") @db.VarChar(12)
+  receptorRazonSocial String?       @map("receptor_razon_social") @db.VarChar(255)
+  receptorRut         String?       @map("receptor_rut") @db.VarChar(12)
+  fechaHora           DateTime      @map("fecha_hora") @db.Timestamp(6)
+  tipoEntrega         TipoEntrega   @map("tipo_entrega")
+  descripcion         String?
+  cantidad            Decimal       @db.Decimal(12, 2)
+  unidad              String        @db.VarChar(50)
+  estado              EstadoEntrega @default(PENDIENTE)
+  observaciones       String?
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  evento              Evento        @relation(fields: [eventoId], references: [id], onDelete: Cascade)
 
   @@index([eventoId])
-  @@index([empresaId])
-  @@index([empresaReceptoraId])
   @@index([fechaHora(sort: Desc)])
   @@index([estado])
   @@map("entrega")
@@ -102,14 +77,11 @@ model Proveedor {
   activo         Boolean              @default(true)
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
-  empresaId      String?              @map("empresa_id") @db.Uuid
   operaciones       OperacionProveedor[]
   ordenesCompra     OrdenCompra[]
-  empresa                  Empresa?               @relation(fields: [empresaId], references: [id])
   personasContacto         ContactoPersona[]
 
   @@index([activo])
-  @@index([empresaId])
   @@map("proveedor")
 }
 
@@ -140,14 +112,11 @@ model Cliente {
   activo         Boolean       @default(true)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
-  empresaId      String?       @map("empresa_id") @db.Uuid
-  empresa            Empresa?          @relation(fields: [empresaId], references: [id])
   operaciones        Operacion[]
   presupuestos       Presupuesto[]
   personasContacto   ContactoPersona[]
 
   @@index([activo])
-  @@index([empresaId])
   @@map("cliente")
 }
 
@@ -469,18 +438,6 @@ enum EstadoOC {
   ENVIADA
   RECIBIDA
   CANCELADA
-}
-
-enum TipoEmpresa {
-  PROVEEDOR
-  CLIENTE
-  TRANSPORTISTA
-  OTRO
-}
-
-enum EstadoEmpresa {
-  ACTIVA
-  INACTIVA
 }
 
 enum TipoEvento {

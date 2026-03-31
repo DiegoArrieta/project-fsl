@@ -1,12 +1,14 @@
 import { z } from 'zod'
 
 /**
- * Schema para crear/actualizar Entrega
+ * Schema para crear/actualizar Entrega (origen/receptor como texto; sin tabla empresa).
  */
 export const entregaSchema = z.object({
   eventoId: z.string().uuid('ID de evento inválido'),
-  empresaId: z.string().uuid('ID de empresa inválido'),
-  empresaReceptoraId: z.string().uuid('ID de empresa receptora inválido').optional().nullable(),
+  origenRazonSocial: z.string().min(1, 'Razón social de origen requerida').max(255),
+  origenRut: z.string().min(1, 'RUT de origen requerido').max(12),
+  receptorRazonSocial: z.string().max(255).optional().nullable(),
+  receptorRut: z.string().max(12).optional().nullable(),
   fechaHora: z.coerce.date({
     required_error: 'La fecha y hora son requeridas',
     invalid_type_error: 'Fecha y hora inválidas',
@@ -39,4 +41,3 @@ export const entregaEstadoSchema = z.object({
 
 export type EntregaInput = z.infer<typeof entregaSchema>
 export type EntregaEstadoInput = z.infer<typeof entregaEstadoSchema>
-
