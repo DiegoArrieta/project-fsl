@@ -6,6 +6,8 @@ import type { NextAuthConfig } from 'next-auth'
  * El proveedor Credentials vive en `auth.ts` (Node).
  */
 export default {
+  /** VPS / proxy reverso: evita fallos de sesión en API routes (401 → selects vacíos). */
+  trustHost: true,
   pages: {
     signIn: '/login',
   },

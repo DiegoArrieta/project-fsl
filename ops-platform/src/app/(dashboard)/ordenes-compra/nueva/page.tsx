@@ -33,13 +33,13 @@ interface LineaForm {
 }
 
 async function fetchProveedoresActivos(): Promise<ProveedorOption[]> {
-  const response = await fetch('/api/proveedores?activo=true&pageSize=500')
+  const response = await fetch('/api/proveedores?activo=true&pageSize=500', { credentials: 'include' })
+  const json = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.error || 'Error al cargar proveedores')
+    const msg = typeof json.error === 'string' ? json.error : `Error al cargar proveedores (${response.status})`
+    throw new Error(msg)
   }
-  const json = await response.json()
-  return (json.data ?? []) as ProveedorOption[]
+  return Array.isArray(json.data) ? (json.data as ProveedorOption[]) : []
 }
 
 const validationSchema = Yup.object().shape({

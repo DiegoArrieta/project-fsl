@@ -1,6 +1,6 @@
 'use client'
 
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, useWatch, type DefaultValues } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createPresupuestoSchema, type CreatePresupuestoDto } from '@/modules/presupuestos/dto/create-presupuesto.dto'
-import { useState, useEffect } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
@@ -36,25 +35,27 @@ interface PresupuestoFormProps {
 }
 
 async function fetchClientes() {
-  const response = await fetch('/api/clientes')
+  const params = new URLSearchParams({ activo: 'true', pageSize: '500', page: '1' })
+  const response = await fetch(`/api/clientes?${params}`, { credentials: 'include' })
+  const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    console.error('Error fetching clientes:', response.status, response.statusText)
-    throw new Error('Error al cargar clientes')
+    const msg =
+      typeof payload.error === 'string' ? payload.error : `Error al cargar clientes (${response.status})`
+    throw new Error(msg)
   }
-  const data = await response.json()
-  console.log('Clientes cargados:', data.data?.length || 0)
-  return data.data || []
+  return Array.isArray(payload.data) ? payload.data : []
 }
 
 async function fetchTiposPallet() {
-  const response = await fetch('/api/tipos-pallet')
+  const params = new URLSearchParams({ pageSize: '100', page: '1' })
+  const response = await fetch(`/api/tipos-pallet?${params}`, { credentials: 'include' })
+  const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    console.error('Error fetching tipos-pallet:', response.status, response.statusText)
-    throw new Error('Error al cargar tipos de pallet')
+    const msg =
+      typeof payload.error === 'string' ? payload.error : `Error al cargar tipos de pallet (${response.status})`
+    throw new Error(msg)
   }
-  const data = await response.json()
-  console.log('Tipos de pallet cargados:', data.data?.length || 0)
-  return data.data || []
+  return Array.isArray(payload.data) ? payload.data : []
 }
 
 export function PresupuestoForm({
@@ -63,13 +64,25 @@ export function PresupuestoForm({
   onCancel,
   isLoading = false,
 }: PresupuestoFormProps) {
-  const { data: clientesData, isLoading: isLoadingClientes } = useQuery({
-    queryKey: ['clientes'],
+  const {
+    data: clientesData,
+    isLoading: isLoadingClientes,
+    isError: isErrorClientes,
+    error: errorClientes,
+    refetch: refetchClientes,
+  } = useQuery({
+    queryKey: ['clientes', 'presupuesto-form', 'activos'],
     queryFn: fetchClientes,
   })
 
-  const { data: tiposPalletData, isLoading: isLoadingTipos } = useQuery({
-    queryKey: ['tipos-pallet'],
+  const {
+    data: tiposPalletData,
+    isLoading: isLoadingTipos,
+    isError: isErrorTipos,
+    error: errorTipos,
+    refetch: refetchTipos,
+  } = useQuery({
+    queryKey: ['tipos-pallet', 'presupuesto-form'],
     queryFn: fetchTiposPallet,
   })
 
@@ -78,8 +91,9 @@ export function PresupuestoForm({
   const tiposPallet = Array.isArray(tiposPalletData) ? tiposPalletData : []
 
   const isDataLoading = isLoadingClientes || isLoadingTipos
+  const isCatalogError = isErrorClientes || isErrorTipos
 
-  const defaultValues: any = {
+  const defaultValues = {
     clienteId: initialData?.clienteId || '',
     fecha: initialData?.fecha
       ? format(new Date(initialData.fecha), 'yyyy-MM-dd')
@@ -90,7 +104,7 @@ export function PresupuestoForm({
     lineas: initialData?.lineas || [
       { tipoPalletId: '', cantidad: 1, precioUnitario: 0, descripcion: '' },
     ],
-  }
+  } as DefaultValues<CreatePresupuestoDto>
 
   const form = useForm<CreatePresupuestoDto>({
     resolver: zodResolver(createPresupuestoSchema),
@@ -102,9 +116,9 @@ export function PresupuestoForm({
     name: 'lineas',
   })
 
-  const watchLineas = form.watch('lineas')
-  
-  const subtotal = watchLineas.reduce((acc, current) => {
+  const watchLineas = useWatch({ control: form.control, name: 'lineas' })
+
+  const subtotal = (watchLineas ?? []).reduce((acc, current) => {
     const cant = Number(current.cantidad) || 0
     const precio = Number(current.precioUnitario) || 0
     return acc + cant * precio
@@ -118,6 +132,34 @@ export function PresupuestoForm({
       <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-xl border border-dashed border-muted-foreground/30">
         <Calculator className="h-10 w-10 animate-spin text-primary mb-4" />
         <p className="text-muted-foreground font-medium">Cargando datos maestros...</p>
+      </div>
+    )
+  }
+
+  if (isCatalogError) {
+    const msg = [
+      isErrorClientes && errorClientes instanceof Error ? errorClientes.message : null,
+      isErrorTipos && errorTipos instanceof Error ? errorTipos.message : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 px-4 text-center bg-destructive/5 rounded-xl border border-destructive/20">
+        <p className="text-sm text-destructive font-medium max-w-md">
+          {msg || 'No se pudieron cargar clientes o tipos de pallet. Compruebe la sesión y vuelva a intentar.'}
+        </p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {isErrorClientes ? (
+            <Button type="button" variant="outline" onClick={() => void refetchClientes()}>
+              Reintentar clientes
+            </Button>
+          ) : null}
+          {isErrorTipos ? (
+            <Button type="button" variant="outline" onClick={() => void refetchTipos()}>
+              Reintentar tipos de pallet
+            </Button>
+          ) : null}
+        </div>
       </div>
     )
   }
@@ -139,20 +181,28 @@ export function PresupuestoForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Cliente <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value ? field.value : undefined}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccione un cliente" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {clientes.map((cliente: any) => (
+                            {clientes.map((cliente: { id: string; razonSocial: string }) => (
                               <SelectItem key={cliente.id} value={cliente.id}>
                                 {cliente.razonSocial}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {clientes.length === 0 ? (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            No hay clientes activos. Cree uno en Contactos antes de generar un presupuesto.
+                          </p>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -239,14 +289,17 @@ export function PresupuestoForm({
                               name={`lineas.${index}.tipoPalletId`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <Select
+                                    onValueChange={field.onChange}
+                                    value={field.value ? field.value : undefined}
+                                  >
                                     <FormControl>
                                       <SelectTrigger className="border-0 bg-transparent shadow-none focus:ring-0">
                                         <SelectValue placeholder="Tipo..." />
                                       </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                      {tiposPallet.map((tipo: any) => (
+                                      {tiposPallet.map((tipo: { id: string; nombre: string }) => (
                                         <SelectItem key={tipo.id} value={tipo.id}>
                                           {tipo.nombre}
                                         </SelectItem>

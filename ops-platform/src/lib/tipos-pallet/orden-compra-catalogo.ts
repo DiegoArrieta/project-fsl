@@ -93,7 +93,8 @@ export function tipoPalletSelectTypeaheadText(tipo: TipoPalletCatalogoOc): strin
 }
 
 export async function fetchTiposPalletCatalogoOrdenCompra(): Promise<TipoPalletCatalogoOc[]> {
-  const response = await fetch('/api/tipos-pallet?pageSize=500')
+  /** La API autenticada limita pageSize a 100; pedir el máximo permitido. */
+  const response = await fetch('/api/tipos-pallet?pageSize=100&page=1', { credentials: 'include' })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     throw new Error(typeof body.error === 'string' ? body.error : 'Error al cargar tipos de pallet')
