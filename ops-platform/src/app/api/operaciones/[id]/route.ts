@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
+import { logPrismaKnownRequestError } from '@/lib/prisma/log-known-request-error'
 import { updateOperacionSchema } from '@/lib/validations/operacion'
 import { calcularTotalesOperacion } from '@/lib/operaciones/calculos'
 
@@ -71,6 +72,7 @@ export async function GET(
       data: operacion,
     })
   } catch (error) {
+    logPrismaKnownRequestError('Error al obtener operación', error)
     console.error('Error al obtener operación:', error)
     return NextResponse.json(
       { success: false, error: 'Error al obtener operación' },
@@ -222,6 +224,7 @@ export async function PUT(
       )
     }
 
+    logPrismaKnownRequestError('Error al actualizar operación', error)
     console.error('Error al actualizar operación:', error)
     return NextResponse.json(
       { success: false, error: 'Error al actualizar operación' },
@@ -276,6 +279,7 @@ export async function DELETE(
       message: 'Operación eliminada correctamente',
     })
   } catch (error) {
+    logPrismaKnownRequestError('Error al eliminar operación', error)
     console.error('Error al eliminar operación:', error)
     return NextResponse.json(
       { success: false, error: 'Error al eliminar operación' },

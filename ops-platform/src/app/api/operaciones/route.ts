@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
+import { logPrismaKnownRequestError } from '@/lib/prisma/log-known-request-error'
 import { createOperacionSchema } from '@/lib/validations/operacion'
 import { generarNumeroOperacion } from '@/lib/operaciones/calculos'
 
@@ -124,6 +125,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
+    logPrismaKnownRequestError('Error al listar operaciones', error)
     console.error('Error al listar operaciones:', error)
     return NextResponse.json(
       { success: false, error: 'Error al listar operaciones' },
@@ -220,6 +222,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    logPrismaKnownRequestError('Error al crear operación', error)
     console.error('Error al crear operación:', error)
     return NextResponse.json(
       { success: false, error: 'Error al crear operación' },
