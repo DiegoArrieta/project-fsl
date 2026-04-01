@@ -26,6 +26,13 @@ import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Trash2, Calculator } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TipoPalletSelectItemBody } from '@/components/ordenes-compra/tipo-pallet-select-item-body'
+import { TipoPalletSelectTriggerResumen } from '@/components/ordenes-compra/tipo-pallet-select-trigger-resumen'
+import {
+  fetchTiposPalletCatalogoOrdenCompra,
+  findTipoPalletCatalogoOc,
+  tipoPalletSelectTypeaheadText,
+} from '@/lib/tipos-pallet/orden-compra-catalogo'
 
 interface PresupuestoFormProps {
   initialData?: Partial<CreatePresupuestoDto> & { id?: string, estado?: string }
@@ -45,18 +52,6 @@ async function fetchClientes() {
   if (!response.ok) {
     const msg =
       typeof payload.error === 'string' ? payload.error : `Error al cargar clientes (${response.status})`
-    throw new Error(msg)
-  }
-  return Array.isArray(payload.data) ? payload.data : []
-}
-
-async function fetchTiposPallet() {
-  const params = new URLSearchParams({ pageSize: '100', page: '1' })
-  const response = await fetch(`/api/tipos-pallet?${params}`, { credentials: 'include' })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const msg =
-      typeof payload.error === 'string' ? payload.error : `Error al cargar tipos de pallet (${response.status})`
     throw new Error(msg)
   }
   return Array.isArray(payload.data) ? payload.data : []
@@ -86,8 +81,8 @@ export function PresupuestoForm({
     error: errorTipos,
     refetch: refetchTipos,
   } = useQuery({
-    queryKey: ['tipos-pallet', 'presupuesto-form'],
-    queryFn: fetchTiposPallet,
+    queryKey: ['tipos-pallet', 'orden-compra'],
+    queryFn: fetchTiposPalletCatalogoOrdenCompra,
   })
 
   // Asegurar que siempre sean arrays
@@ -171,9 +166,8 @@ export function PresupuestoForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
+        <div className="space-y-6">
+          <Card>
               <CardHeader>
                 <CardTitle>Información General</CardTitle>
               </CardHeader>
@@ -277,7 +271,7 @@ export function PresupuestoForm({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[200px]">Tipo Pallet</TableHead>
+                        <TableHead className="min-w-48">Pallet *</TableHead>
                         <TableHead className="w-[100px]">Cant.</TableHead>
                         <TableHead className="w-[150px]">Precio Unit.</TableHead>
                         <TableHead>Descripción</TableHead>
@@ -291,27 +285,35 @@ export function PresupuestoForm({
                             <FormField
                               control={form.control}
                               name={`lineas.${index}.tipoPalletId`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <Select
-                                    onValueChange={field.onChange}
-                                    value={field.value ? field.value : undefined}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className="border-0 bg-transparent shadow-none focus:ring-0">
-                                        <SelectValue placeholder="Tipo..." />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {tiposPallet.map((tipo: { id: string; nombre: string }) => (
-                                        <SelectItem key={tipo.id} value={tipo.id}>
-                                          {tipo.nombre}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </FormItem>
-                              )}
+                              render={({ field }) => {
+                                const tipoSel = findTipoPalletCatalogoOc(tiposPallet, field.value || '')
+                                return (
+                                  <FormItem>
+                                    <Select
+                                      onValueChange={field.onChange}
+                                      value={field.value ? field.value : undefined}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="h-10 w-full min-w-44 max-w-md">
+                                          <TipoPalletSelectTriggerResumen tipo={tipoSel} />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent className="z-200 max-h-[min(24rem,70vh)] w-[min(36rem,calc(100vw-2rem))] min-w-(--radix-select-trigger-width)">
+                                        {tiposPallet.map((tipo) => (
+                                          <SelectItem
+                                            key={tipo.id}
+                                            value={tipo.id}
+                                            textValue={tipoPalletSelectTypeaheadText(tipo)}
+                                            className="py-1.5"
+                                          >
+                                            <TipoPalletSelectItemBody tipo={tipo} />
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormItem>
+                                )
+                              }}
                             />
                           </TableCell>
                           <TableCell>
@@ -417,47 +419,54 @@ export function PresupuestoForm({
                 />
               </CardContent>
             </Card>
-          </div>
 
-          <div className="space-y-6">
-            <Card className="sticky top-24 border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5 text-primary" />
-                  Resumen de Totales
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Neto Subtotal</span>
-                  <span className="font-semibold">
-                    {subtotal.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
-                  </span>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground shrink-0">
+                    <Calculator className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    <span>Resumen de Totales</span>
+                  </div>
+                  <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm">
+                    <div className="flex flex-col gap-0.5 sm:block sm:gap-0">
+                      <span className="text-muted-foreground text-xs sm:mr-2 sm:inline">Neto</span>
+                      <span className="font-semibold tabular-nums">
+                        {subtotal.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 sm:block sm:gap-0">
+                      <span className="text-muted-foreground text-xs sm:mr-2 sm:inline">IVA (19%)</span>
+                      <span className="font-semibold tabular-nums text-muted-foreground">
+                        {iva.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
+                      </span>
+                    </div>
+                    <div className="flex w-full flex-col gap-0.5 border-t border-primary/20 pt-2 sm:ml-0 sm:flex-row sm:items-baseline sm:gap-2 sm:border-t-0 sm:pt-0 md:w-auto">
+                      <span className="text-sm font-bold">TOTAL</span>
+                      <span className="text-xl font-black text-primary tabular-nums leading-none sm:text-2xl">
+                        {total.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">IVA (19%)</span>
-                  <span className="font-semibold text-muted-foreground">
-                    {iva.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-primary/20 flex justify-between items-center">
-                  <span className="text-lg font-bold">TOTAL</span>
-                  <span className="text-2xl font-black text-primary">
-                    {total.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
-                  </span>
-                </div>
-
-                <div className="pt-6 space-y-3">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:justify-end xl:w-auto">
+                  <Button type="submit" size="sm" disabled={isLoading} className="sm:min-w-40">
                     {isLoading ? 'Guardando...' : 'Guardar Presupuesto'}
                   </Button>
-                  <Button type="button" variant="outline" className="w-full" onClick={onCancel} disabled={isLoading}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onCancel}
+                    disabled={isLoading}
+                    className="sm:min-w-40"
+                  >
                     Cancelar
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </form>
     </Form>

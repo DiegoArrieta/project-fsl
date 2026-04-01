@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatTipoPalletAtributosLineaDesdeInput } from '@/lib/tipos-pallet/orden-compra-catalogo'
 import { ConfirmIrreversibleActionDialog } from '@/components/shared/confirm-irreversible-action-dialog'
 
 async function obtenerPresupuesto(id: string) {
@@ -217,7 +218,7 @@ export default function PresupuestoDetallePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Tipo Pallet</TableHead>
+                    <TableHead className="min-w-48">Pallet</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead className="text-right">Precio Unitario</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -226,13 +227,19 @@ export default function PresupuestoDetallePage() {
                 <TableBody>
                   {presupuesto.lineas.map((linea: any) => (
                     <TableRow key={linea.id}>
-                      <TableCell className="font-medium">
-                        {linea.tipoPallet?.nombre || 'Pallet'}
-                        {linea.descripcion && (
-                          <p className="text-xs text-muted-foreground font-normal mt-0.5">
+                      <TableCell className="max-w-xl align-top">
+                        {linea.tipoPallet ? (
+                          <span className="text-sm leading-snug text-foreground">
+                            {formatTipoPalletAtributosLineaDesdeInput(linea.tipoPallet)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                        {linea.descripcion ? (
+                          <p className="text-xs text-muted-foreground font-normal mt-1.5">
                             {linea.descripcion}
                           </p>
-                        )}
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right">{linea.cantidad}</TableCell>
                       <TableCell className="text-right">

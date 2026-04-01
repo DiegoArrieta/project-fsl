@@ -328,6 +328,7 @@ export class PresupuestosController {
         cantidad: linea.cantidad,
         precioUnitario: linea.precioUnitario.toNumber(),
         descripcion: linea.descripcion,
+        tipoPallet: linea.tipoPalletVista,
       })),
       createdAt: presupuesto.createdAt,
       updatedAt: presupuesto.updatedAt,

@@ -2,7 +2,47 @@ import { prisma } from '@/lib/db'
 import { Prisma, EstadoPresupuesto } from '@prisma/client'
 import { IPresupuestoRepository } from '../domain/presupuesto.repository.interface'
 import { PresupuestoEntity } from '../domain/presupuesto.entity'
-import { PresupuestoLineaEntity } from '../domain/presupuesto-linea.entity'
+import {
+  PresupuestoLineaEntity,
+  type PresupuestoLineaTipoPalletVista,
+} from '../domain/presupuesto-linea.entity'
+
+const presupuestoLineasIncludeCatalogo = {
+  include: {
+    tipoPallet: {
+      include: {
+        categoria: true,
+        paises: { include: { pais: true } },
+      },
+    },
+  },
+} as const
+
+function mapPrismaTipoPalletLineaVista(linea: {
+  tipoPallet?: {
+    id: string
+    codigo: string
+    nombre: string
+    dimensiones: string | null
+    requiereCertificacion: boolean
+    categoria: { nombre: string }
+    paises: Array<{ pais: { nombre: string; codigoIso: string } }>
+  } | null
+}): PresupuestoLineaTipoPalletVista | null {
+  const tp = linea.tipoPallet
+  if (!tp) return null
+  return {
+    id: tp.id,
+    codigo: tp.codigo,
+    nombre: tp.nombre,
+    categoria: { nombre: tp.categoria.nombre },
+    dimensiones: tp.dimensiones,
+    requiereCertificacion: tp.requiereCertificacion,
+    paises: (tp.paises ?? []).map((row) => ({
+      pais: { nombre: row.pais.nombre, codigoIso: row.pais.codigoIso },
+    })),
+  }
+}
 
 /**
  * Implementación del repositorio de Presupuesto usando Prisma
@@ -48,11 +88,7 @@ export class PresupuestoRepository implements IPresupuestoRepository {
         },
       },
       include: {
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        lineas: presupuestoLineasIncludeCatalogo,
       },
     })
 
@@ -63,11 +99,7 @@ export class PresupuestoRepository implements IPresupuestoRepository {
     const presupuesto = await prisma.presupuesto.findUnique({
       where: { id },
       include: {
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        lineas: presupuestoLineasIncludeCatalogo,
       },
     })
 
@@ -110,11 +142,7 @@ export class PresupuestoRepository implements IPresupuestoRepository {
       prisma.presupuesto.findMany({
         where,
         include: {
-          lineas: {
-            include: {
-              tipoPallet: true,
-            },
-          },
+          lineas: presupuestoLineasIncludeCatalogo,
         },
         orderBy: {
           fecha: 'desc',
@@ -136,11 +164,7 @@ export class PresupuestoRepository implements IPresupuestoRepository {
       where: { id },
       data: { estado },
       include: {
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        lineas: presupuestoLineasIncludeCatalogo,
       },
     })
 
@@ -200,11 +224,7 @@ export class PresupuestoRepository implements IPresupuestoRepository {
       where: { id },
       data: updateData,
       include: {
-        lineas: {
-          include: {
-            tipoPallet: true,
-          },
-        },
+        lineas: presupuestoLineasIncludeCatalogo,
       },
     })
 
@@ -242,7 +262,8 @@ export class PresupuestoRepository implements IPresupuestoRepository {
             linea.cantidad,
             linea.precioUnitario,
             linea.descripcion,
-            linea.createdAt
+            linea.createdAt,
+            mapPrismaTipoPalletLineaVista(linea)
           )
       ),
       presupuesto.createdAt,
