@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
 import { toast } from 'sonner'
 import { mapOrdenCompraApiToUi, type OrdenCompraUi } from '@/lib/ordenes-compra/ui-map'
+import { ConfirmIrreversibleActionDialog } from '@/components/shared/confirm-irreversible-action-dialog'
 
 async function fetchOrdenCompraById(id: string): Promise<OrdenCompraUi | null> {
   const response = await fetch(`/api/ordenes-compra/${id}`)
@@ -28,9 +29,11 @@ async function fetchOrdenCompraById(id: string): Promise<OrdenCompraUi | null> {
 
 export default function OrdenCompraDetallePage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
   const queryClient = useQueryClient()
   const [isDownloading, setIsDownloading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const {
     data: oc,
@@ -74,6 +77,19 @@ export default function OrdenCompraDetallePage() {
     } finally {
       setIsDownloading(false)
     }
+  }
+
+  const handleConfirmDeleteOrden = async () => {
+    const response = await fetch(`/api/ordenes-compra/${id}`, { method: 'DELETE' })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const msg = body.error || 'No se pudo eliminar la orden de compra'
+      toast.error(msg)
+      throw new Error(msg)
+    }
+    toast.success(body.message || 'Orden de compra eliminada')
+    await queryClient.invalidateQueries({ queryKey: ['ordenes-compra'] })
+    router.push('/ordenes-compra')
   }
 
   if (isLoading) {
@@ -143,13 +159,28 @@ export default function OrdenCompraDetallePage() {
                   Editar
                 </Link>
               </Button>
-              <Button variant="destructive" size="icon" type="button" aria-label="Eliminar borrador">
+              <Button
+                variant="destructive"
+                size="icon"
+                type="button"
+                aria-label="Eliminar orden de compra"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </>
           )}
         </div>
       </div>
+
+      <ConfirmIrreversibleActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="¿Eliminar esta orden de compra?"
+        entitySummary={`Orden ${oc.numero} · Solo se pueden eliminar órdenes en borrador.`}
+        warningText="Esta acción es irreversible. La orden y sus líneas dejarán de existir en el sistema."
+        onConfirm={handleConfirmDeleteOrden}
+      />
 
       {/* Información General */}
       <Card>

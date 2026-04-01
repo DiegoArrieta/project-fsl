@@ -1,9 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, FileDown, CheckCircle2, Edit } from 'lucide-react'
+import { ArrowLeft, Loader2, FileDown, CheckCircle2, Edit, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConfirmIrreversibleActionDialog } from '@/components/shared/confirm-irreversible-action-dialog'
 
 async function obtenerPresupuesto(id: string) {
   const response = await fetch(`/api/presupuestos/${id}`)
@@ -19,6 +21,15 @@ async function obtenerPresupuesto(id: string) {
   }
   const result = await response.json()
   return result.data
+}
+
+async function eliminarPresupuestoApi(id: string) {
+  const response = await fetch(`/api/presupuestos/${id}`, { method: 'DELETE' })
+  const json = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(json.error || 'Error al eliminar presupuesto')
+  }
+  return json
 }
 
 async function aceptarPresupuesto(id: string) {
@@ -46,11 +57,25 @@ export default function PresupuestoDetallePage() {
   const router = useRouter()
   const id = params.id as string
   const queryClient = useQueryClient()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const { data: presupuesto, isLoading, error } = useQuery({
     queryKey: ['presupuesto', id],
     queryFn: () => obtenerPresupuesto(id),
   })
+
+  const handleConfirmDeletePresupuesto = async () => {
+    try {
+      const json = await eliminarPresupuestoApi(id)
+      toast.success(json.message || 'Presupuesto eliminado correctamente')
+      await queryClient.invalidateQueries({ queryKey: ['presupuestos'] })
+      router.push('/presupuestos')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Error al eliminar presupuesto'
+      toast.error(message)
+      throw e
+    }
+  }
 
   const acceptMutation = useMutation({
     mutationFn: () => aceptarPresupuesto(id),
@@ -158,8 +183,29 @@ export default function PresupuestoDetallePage() {
               Aceptar y Crear Operación
             </Button>
           )}
+
+          {presupuesto.estado !== 'ACEPTADO' && (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+              aria-label="Eliminar presupuesto"
+            >
+              <Trash2 className="h-4 w-4 mr-2" aria-hidden />
+              Eliminar
+            </Button>
+          )}
         </div>
       </div>
+
+      <ConfirmIrreversibleActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="¿Eliminar este presupuesto?"
+        entitySummary={`Presupuesto ${presupuesto.numero}`}
+        warningText="Esta acción es irreversible. Se eliminarán el presupuesto y todas sus líneas. No aplica a presupuestos aceptados ni si existen órdenes de compra vinculadas."
+        onConfirm={handleConfirmDeletePresupuesto}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

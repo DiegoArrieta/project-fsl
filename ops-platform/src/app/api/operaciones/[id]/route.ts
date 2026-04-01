@@ -260,10 +260,32 @@ export async function DELETE(
       )
     }
 
+    if (operacion.estadoFinanciero === 'CERRADA') {
+      return NextResponse.json(
+        { success: false, error: 'No se puede eliminar una operación cerrada' },
+        { status: 400 }
+      )
+    }
+
     // Verificar que no tenga documentos ni pagos
     if (operacion.documentos.length > 0 || operacion.pagos.length > 0) {
       return NextResponse.json(
         { success: false, error: 'No se puede eliminar una operación con documentos o pagos asociados' },
+        { status: 400 }
+      )
+    }
+
+    const ordenesCompraAsociadas = await prisma.ordenCompra.count({
+      where: { operacionId: id },
+    })
+
+    if (ordenesCompraAsociadas > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'No se puede eliminar: existen órdenes de compra asociadas a esta operación. Elimínelas o desvincúlelas primero.',
+        },
         { status: 400 }
       )
     }

@@ -211,6 +211,12 @@ export class PresupuestoRepository implements IPresupuestoRepository {
     return this.mapToEntity(presupuesto)
   }
 
+  async delete(id: string): Promise<void> {
+    await prisma.presupuesto.delete({
+      where: { id },
+    })
+  }
+
   /**
    * Mapea un modelo de Prisma a una entidad de dominio
    */

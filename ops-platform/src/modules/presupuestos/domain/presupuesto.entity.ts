@@ -63,5 +63,12 @@ export class PresupuestoEntity {
   puedeSerEditado(): boolean {
     return this.estado === 'BORRADOR'
   }
+
+  /**
+   * Presupuestos aceptados quedan ligados a una operación y no deben eliminarse por este flujo.
+   */
+  puedeSerEliminado(): boolean {
+    return this.estado !== 'ACEPTADO'
+  }
 }
 

@@ -6,6 +6,7 @@ import { ListarPresupuestosUseCase } from '../application/listar-presupuestos.us
 import { ObtenerPresupuestoUseCase } from '../application/obtener-presupuesto.usecase'
 import { AceptarPresupuestoUseCase } from '../application/aceptar-presupuesto.usecase'
 import { ActualizarPresupuestoUseCase } from '../application/actualizar-presupuesto.usecase'
+import { EliminarPresupuestoUseCase } from '../application/eliminar-presupuesto.usecase'
 import { createPresupuestoSchema, updatePresupuestoSchema } from '../dto/create-presupuesto.dto'
 import { PDFService } from '../infrastructure/pdf.service'
 
@@ -20,6 +21,7 @@ export class PresupuestosController {
   private obtenerUseCase: ObtenerPresupuestoUseCase
   private aceptarUseCase: AceptarPresupuestoUseCase
   private actualizarUseCase: ActualizarPresupuestoUseCase
+  private eliminarUseCase: EliminarPresupuestoUseCase
 
   constructor() {
     this.repository = new PresupuestoRepository()
@@ -28,6 +30,7 @@ export class PresupuestosController {
     this.obtenerUseCase = new ObtenerPresupuestoUseCase(this.repository)
     this.aceptarUseCase = new AceptarPresupuestoUseCase(this.repository)
     this.actualizarUseCase = new ActualizarPresupuestoUseCase(this.repository)
+    this.eliminarUseCase = new EliminarPresupuestoUseCase(this.repository)
   }
 
   /**
@@ -195,6 +198,44 @@ export class PresupuestosController {
       console.error('Error al actualizar presupuesto:', error)
       return NextResponse.json(
         { success: false, error: error.message || 'Error al actualizar presupuesto' },
+        { status: 500 }
+      )
+    }
+  }
+
+  /**
+   * DELETE /api/presupuestos/:id
+   * Elimina un presupuesto (no aceptado, sin OC ni operación vinculada)
+   */
+  async remove(id: string): Promise<NextResponse> {
+    try {
+      const session = await auth()
+      if (!session) {
+        return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+      }
+
+      await this.eliminarUseCase.execute(id)
+
+      return NextResponse.json({
+        success: true,
+        message: 'Presupuesto eliminado correctamente',
+      })
+    } catch (error: any) {
+      if (error.message === 'Presupuesto no encontrado') {
+        return NextResponse.json({ success: false, error: error.message }, { status: 404 })
+      }
+
+      if (
+        typeof error.message === 'string' &&
+        (error.message.startsWith('No se puede eliminar') ||
+          error.message.includes('operación vinculada'))
+      ) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 400 })
+      }
+
+      console.error('Error al eliminar presupuesto:', error)
+      return NextResponse.json(
+        { success: false, error: error.message || 'Error al eliminar presupuesto' },
         { status: 500 }
       )
     }

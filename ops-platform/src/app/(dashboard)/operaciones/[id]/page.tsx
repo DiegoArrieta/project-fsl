@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2, Eye } from 'lucide-react'
+import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2, Eye, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
@@ -24,6 +24,8 @@ import { RegistrarFactoringDialog } from '@/components/operaciones/RegistrarFact
 import { AdjuntarDocumentoDialog } from '@/components/operaciones/AdjuntarDocumentoDialog'
 import { DocumentoVisualizarDialog } from '@/components/operaciones/DocumentoVisualizarDialog'
 import { DocumentoDownloadButton } from '@/components/operaciones/DocumentoDownloadButton'
+import { ConfirmIrreversibleActionDialog } from '@/components/shared/confirm-irreversible-action-dialog'
+import { toast } from 'sonner'
 
 async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
   const response = await fetch(`/api/operaciones/${id}`)
@@ -40,12 +42,14 @@ async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
 
 export default function OperacionDetallePage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
   const queryClient = useQueryClient()
   const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false)
   const [factoringDialogOpen, setFactoringDialogOpen] = useState(false)
   const [adjuntarDocumentoOpen, setAdjuntarDocumentoOpen] = useState(false)
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoOperacionApi | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const {
     data: operacion,
@@ -93,6 +97,22 @@ export default function OperacionDetallePage() {
   const lineas = operacion.lineas || []
   const documentos = operacion.documentos || []
   const pagos = operacion.pagos || []
+  const puedeEliminarOperacion =
+    operacion.estadoFinanciero !== 'CERRADA' && documentos.length === 0 && pagos.length === 0
+
+  const handleConfirmDeleteOperacion = async () => {
+    const response = await fetch(`/api/operaciones/${id}`, { method: 'DELETE' })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const msg = body.error || 'No se pudo eliminar la operación'
+      toast.error(msg)
+      throw new Error(msg)
+    }
+    toast.success(body.message || 'Operación eliminada correctamente')
+    await queryClient.invalidateQueries({ queryKey: ['operaciones'] })
+    router.push('/operaciones')
+  }
+
   const tieneCliente = Boolean(operacion.cliente)
   const tieneProveedor = (operacion.proveedores?.length ?? 0) > 0
   const totales = calcularTotalesDesdeLineas(operacion.tipo, lineas)
@@ -130,13 +150,35 @@ export default function OperacionDetallePage() {
             </p>
           </div>
         </div>
-        {operacion.estadoFinanciero !== 'CERRADA' && (
-          <Button variant="outline" type="button">
-            <Edit className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {operacion.estadoFinanciero !== 'CERRADA' && (
+            <Button variant="outline" type="button">
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          )}
+          {puedeEliminarOperacion && (
+            <Button
+              type="button"
+              variant="destructive"
+              aria-label="Eliminar operación"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" aria-hidden />
+              Eliminar
+            </Button>
+          )}
+        </div>
       </div>
+
+      <ConfirmIrreversibleActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="¿Eliminar esta operación?"
+        entitySummary={`Operación ${operacion.numero}`}
+        warningText="Esta acción es irreversible. Se eliminarán la operación, sus líneas y proveedores asociados. No está permitido si hay documentos, pagos registrados, operación cerrada u órdenes de compra vinculadas."
+        onConfirm={handleConfirmDeleteOperacion}
+      />
 
       <Card>
         <CardContent className="pt-6">

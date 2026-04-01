@@ -72,9 +72,14 @@ export interface IPresupuestoRepository {
         tipoPalletId: string
         cantidad: number
         precioUnitario: number
-        descripcion?: string | null
-      }>
+      descripcion?: string | null
+    }>
     }
   ): Promise<PresupuestoEntity>
+
+  /**
+   * Elimina un presupuesto (las líneas se eliminan en cascada)
+   */
+  delete(id: string): Promise<void>
 }
 
