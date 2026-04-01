@@ -4,6 +4,11 @@ import { prisma } from '@/lib/db'
 import { ordenCompraLineasConTipoPalletDetalle } from '@/lib/ordenes-compra/prisma-includes'
 import { createOrdenCompraSchema } from '@/lib/validations/orden-compra'
 import { generarNumeroOrdenCompra } from '@/lib/ordenes-compra/numero'
+import {
+  assertProductosContraPresupuesto,
+  normalizarProductosSinPresupuesto,
+  OrdenCompraPresupuestoError,
+} from '@/lib/ordenes-compra/presupuesto-disponible'
 
 /**
  * GET /api/ordenes-compra
@@ -89,6 +94,16 @@ export async function POST(request: NextRequest) {
     // Validar datos de entrada
     const validatedData = createOrdenCompraSchema.parse(body)
 
+    const presupuestoId = validatedData.presupuestoId ?? null
+    const productosNormalizados = normalizarProductosSinPresupuesto(presupuestoId, validatedData.productos)
+
+    if (presupuestoId) {
+      await assertProductosContraPresupuesto({
+        presupuestoId,
+        productos: productosNormalizados,
+      })
+    }
+
     // Generar número de orden de compra secuencial
     const ultimaOrden = await prisma.ordenCompra.findFirst({
       orderBy: { numero: 'desc' },
@@ -114,11 +129,12 @@ export async function POST(request: NextRequest) {
       data: {
         ...ordenData,
         lineas: {
-          create: validatedData.productos.map((p) => ({
+          create: productosNormalizados.map((p) => ({
             tipoPalletId: p.tipoPalletId,
             cantidad: p.cantidad,
             precioUnitario: p.precioUnitario,
             descripcion: p.descripcion,
+            presupuestoLineaId: p.presupuestoLineaId ?? null,
           })),
         },
       },
@@ -147,6 +163,10 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       )
+    }
+
+    if (error instanceof OrdenCompraPresupuestoError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 })
     }
 
     console.error('Error al crear orden de compra:', error)

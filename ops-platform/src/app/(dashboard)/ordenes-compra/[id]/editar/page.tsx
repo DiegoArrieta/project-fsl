@@ -21,31 +21,36 @@ import {
   tipoPalletSelectTypeaheadText,
   type TipoPalletCatalogoOc,
 } from '@/lib/tipos-pallet/orden-compra-catalogo'
+import {
+  computeAgotaPresupuestoConEstaOrden,
+  fetchDisponiblePresupuestoOrdenCompra,
+  type LineaFormConPresupuesto,
+} from '@/lib/ordenes-compra/fetch-presupuesto-disponible-oc'
+import { Badge } from '@/components/ui/badge'
 
 interface ProveedorOption {
   id: string
   razonSocial: string
 }
 
-interface LineaForm {
-  tipoPalletId: string
-  cantidad: number
-  precioUnitario: number
-}
+interface LineaForm extends LineaFormConPresupuesto {}
 
 interface OrdenCompraApiParaEditar {
   id: string
   numero: string
   estado: string
   proveedorId: string
+  presupuestoId?: string | null
   fecha: string | Date
   fechaEntrega?: string | Date | null
   direccionEntrega?: string | null
   observaciones?: string | null
+  presupuesto?: { id: string; numero: string; estado: string } | null
   lineas: Array<{
     tipoPalletId: string
     cantidad: number
     precioUnitario: unknown
+    presupuestoLineaId?: string | null
   }>
 }
 
@@ -110,6 +115,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
   const formik = useFormik({
     initialValues: {
       proveedorId: orden.proveedorId,
+      presupuestoId: orden.presupuestoId ?? '',
       fecha: toInputDate(orden.fecha),
       fechaEntregaEsperada: toInputDate(orden.fechaEntrega),
       direccionEntrega: orden.direccionEntrega ?? '',
@@ -117,6 +123,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
         tipoPalletId: l.tipoPalletId,
         cantidad: l.cantidad,
         precioUnitario: l.precioUnitario != null ? Number(l.precioUnitario) : 0,
+        presupuestoLineaId: l.presupuestoLineaId ?? null,
       })) as LineaForm[],
       observaciones: orden.observaciones ?? '',
     },
@@ -129,10 +136,14 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
           fechaEntrega: values.fechaEntregaEsperada?.trim() || '',
           direccionEntrega: values.direccionEntrega?.trim() ?? '',
           observaciones: values.observaciones?.trim() ?? '',
+          ...(values.presupuestoId?.trim()
+            ? { presupuestoId: values.presupuestoId.trim() }
+            : { presupuestoId: null }),
           productos: values.productos.map((p) => ({
             tipoPalletId: p.tipoPalletId,
             cantidad: p.cantidad,
             precioUnitario: p.precioUnitario,
+            ...(p.presupuestoLineaId ? { presupuestoLineaId: p.presupuestoLineaId } : {}),
           })),
         }
 
@@ -171,6 +182,7 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
         tipoPalletId: '',
         cantidad: 0,
         precioUnitario: 0,
+        presupuestoLineaId: null,
       },
     ])
   }
@@ -181,6 +193,14 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
   }
 
   const total = formik.values.productos.reduce((sum, p) => sum + (p.cantidad || 0) * (p.precioUnitario || 0), 0)
+
+  const presupuestoIdTrim = formik.values.presupuestoId?.trim() ?? ''
+  const { data: disponibleData } = useQuery({
+    queryKey: ['presupuesto-disponible-oc', presupuestoIdTrim, ordenId],
+    queryFn: () =>
+      fetchDisponiblePresupuestoOrdenCompra(presupuestoIdTrim, { excludeOrdenCompraId: ordenId }),
+    enabled: Boolean(presupuestoIdTrim),
+  })
 
   return (
     <FormikProvider value={formik}>
@@ -275,22 +295,31 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="direccionEntrega" className="text-sm font-semibold">
-                  Dirección de entrega
-                </Label>
-                <Input
-                  id="direccionEntrega"
-                  name="direccionEntrega"
-                  value={formik.values.direccionEntrega}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  placeholder="Puerto Montt, Av. Principal 123"
-                  className="mt-2"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                <div>
+                  <Label htmlFor="direccionEntrega" className="text-sm font-semibold">
+                    Dirección de entrega
+                  </Label>
+                  <Input
+                    id="direccionEntrega"
+                    name="direccionEntrega"
+                    value={formik.values.direccionEntrega}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    placeholder="Puerto Montt, Av. Principal 123"
+                    className="mt-2"
+                  />
+                </div>
+
+                {presupuestoIdTrim ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm" role="status">
+                    <span className="text-muted-foreground">Presupuesto vinculado: </span>
+                    <Badge variant="outline" className="ml-1">
+                      {orden.presupuesto?.numero ?? disponibleData?.presupuesto.numero ?? presupuestoIdTrim}
+                    </Badge>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
 
           <Card className="shadow-lg border-none">
             <CardHeader className="space-y-1 bg-gradient-to-br from-green-50/50 dark:from-green-950/20 to-background">
@@ -302,12 +331,33 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
+              {presupuestoIdTrim && disponibleData ? (
+                <div
+                  className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm"
+                  role="status"
+                >
+                  <span className="text-muted-foreground">
+                    Cliente:{' '}
+                    <span className="font-medium text-foreground">
+                      {disponibleData.presupuesto.cliente.razonSocial}
+                    </span>
+                  </span>
+                  <Badge variant="outline">{disponibleData.presupuesto.numero}</Badge>
+                  {computeAgotaPresupuestoConEstaOrden(disponibleData.lineas, formik.values.productos) ? (
+                    <Badge>Con esta OC se agota el presupuesto</Badge>
+                  ) : (
+                    <Badge variant="secondary">Cobertura parcial — queda saldo en el presupuesto</Badge>
+                  )}
+                </div>
+              ) : null}
+
               {formik.values.productos.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border">
                   <table className="w-full">
                     <thead className="bg-muted/50">
                       <tr className="border-b">
                         <th className="text-left p-3 font-semibold min-w-48">Pallet *</th>
+                        <th className="text-left p-3 font-semibold whitespace-nowrap">Presup. / disp.</th>
                         <th className="text-left p-3 font-semibold">Cantidad *</th>
                         <th className="text-left p-3 font-semibold">Precio Unit. *</th>
                         <th className="text-left p-3 font-semibold">Subtotal</th>
@@ -317,14 +367,21 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                     <tbody>
                       {formik.values.productos.map((producto, index) => {
                         const tipoSel = findTipoPalletCatalogoOc(tiposPallet, producto.tipoPalletId)
+                        const metaLinea = producto.presupuestoLineaId
+                          ? disponibleData?.lineas.find(
+                              (l) => l.presupuestoLineaId === producto.presupuestoLineaId
+                            )
+                          : undefined
+                        const maxCant = metaLinea?.cantidadDisponible
                         return (
                         <tr key={index} className="border-b hover:bg-accent/50 transition-colors">
                           <td className="p-3 align-top">
                             <Select
                               value={producto.tipoPalletId || undefined}
-                              onValueChange={(value) =>
-                                formik.setFieldValue(`productos.${index}.tipoPalletId`, value)
-                              }
+                              onValueChange={(value) => {
+                                void formik.setFieldValue(`productos.${index}.tipoPalletId`, value)
+                                void formik.setFieldValue(`productos.${index}.presupuestoLineaId`, null)
+                              }}
                             >
                               <SelectTrigger type="button" className="h-10 w-full min-w-44 max-w-md">
                                 <TipoPalletSelectTriggerResumen tipo={tipoSel} />
@@ -351,19 +408,33 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                                 </p>
                               )}
                           </td>
+                          <td className="p-3 align-top text-xs text-muted-foreground whitespace-nowrap">
+                            {metaLinea ? (
+                              <>
+                                <span className="block">P: {metaLinea.cantidadPresupuesto}</span>
+                                <span className="block">Disp.: {metaLinea.cantidadDisponible}</span>
+                              </>
+                            ) : (
+                              <span>—</span>
+                            )}
+                          </td>
                           <td className="p-3 align-top">
                             <Input
                               type="number"
                               inputMode="numeric"
                               value={producto.cantidad || ''}
-                              onChange={(e) =>
-                                formik.setFieldValue(
-                                  `productos.${index}.cantidad`,
-                                  parseInt(e.target.value, 10) || 0
-                                )
-                              }
+                              onChange={(e) => {
+                                const raw = parseInt(e.target.value, 10) || 0
+                                const next =
+                                  maxCant != null
+                                    ? Math.min(Math.max(1, raw), maxCant)
+                                    : Math.max(1, raw)
+                                void formik.setFieldValue(`productos.${index}.cantidad`, next)
+                              }}
                               className="w-28"
                               min={1}
+                              max={maxCant != null ? maxCant : undefined}
+                              aria-label={`Cantidad línea ${index + 1}${maxCant != null ? `, máximo ${maxCant}` : ''}`}
                             />
                           </td>
                           <td className="p-3 align-top">

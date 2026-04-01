@@ -3,13 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { useFormik, FormikProvider } from 'formik'
 import * as Yup from 'yup'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Plus, Trash2, Save, FileText, Package, DollarSign, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -20,16 +21,34 @@ import {
   findTipoPalletCatalogoOc,
   tipoPalletSelectTypeaheadText,
 } from '@/lib/tipos-pallet/orden-compra-catalogo'
+import {
+  computeAgotaPresupuestoConEstaOrden,
+  fetchDisponiblePresupuestoOrdenCompra,
+  type LineaFormConPresupuesto,
+} from '@/lib/ordenes-compra/fetch-presupuesto-disponible-oc'
 
 interface ProveedorOption {
   id: string
   razonSocial: string
 }
 
-interface LineaForm {
-  tipoPalletId: string
-  cantidad: number
-  precioUnitario: number
+interface LineaForm extends LineaFormConPresupuesto {}
+
+interface PresupuestoListItem {
+  id: string
+  numero: string
+  estado: string
+}
+
+async function fetchPresupuestosParaOc(): Promise<PresupuestoListItem[]> {
+  const response = await fetch('/api/presupuestos?pageSize=500', { credentials: 'include' })
+  const json = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const msg = typeof json.error === 'string' ? json.error : `Error al cargar presupuestos (${response.status})`
+    throw new Error(msg)
+  }
+  const data = Array.isArray(json.data) ? (json.data as PresupuestoListItem[]) : []
+  return data.filter((p) => p.estado === 'ENVIADO' || p.estado === 'ACEPTADO')
 }
 
 async function fetchProveedoresActivos(): Promise<ProveedorOption[]> {
@@ -64,6 +83,7 @@ const validationSchema = Yup.object().shape({
 
 export default function NuevaOrdenCompraPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   const { data: proveedores = [], isLoading: loadingProveedores, error: errorProveedores } = useQuery({
     queryKey: ['proveedores-oc-nueva'],
@@ -75,12 +95,18 @@ export default function NuevaOrdenCompraPage() {
     queryFn: fetchTiposPalletCatalogoOrdenCompra,
   })
 
+  const { data: presupuestosLista = [], error: errorPresupuestos } = useQuery({
+    queryKey: ['presupuestos-oc-nueva'],
+    queryFn: fetchPresupuestosParaOc,
+  })
+
   const isLoadingCatalogos = loadingProveedores || loadingTipos
-  const errorCatalogos = errorProveedores || errorTipos
+  const errorCatalogos = errorProveedores || errorTipos || errorPresupuestos
 
   const formik = useFormik({
     initialValues: {
       proveedorId: '',
+      presupuestoId: '',
       fecha: new Date().toISOString().split('T')[0],
       fechaEntregaEsperada: '',
       direccionEntrega: '',
@@ -93,6 +119,7 @@ export default function NuevaOrdenCompraPage() {
         const payload = {
           proveedorId: values.proveedorId,
           fecha: values.fecha,
+          ...(values.presupuestoId?.trim() ? { presupuestoId: values.presupuestoId.trim() } : {}),
           ...(values.fechaEntregaEsperada?.trim()
             ? { fechaEntrega: values.fechaEntregaEsperada.trim() }
             : {}),
@@ -102,6 +129,7 @@ export default function NuevaOrdenCompraPage() {
             tipoPalletId: p.tipoPalletId,
             cantidad: p.cantidad,
             precioUnitario: p.precioUnitario,
+            ...(p.presupuestoLineaId ? { presupuestoLineaId: p.presupuestoLineaId } : {}),
           })),
         }
 
@@ -137,6 +165,45 @@ export default function NuevaOrdenCompraPage() {
     },
   })
 
+  const presupuestoIdForm = formik.values.presupuestoId?.trim() ?? ''
+  const { data: disponibleData } = useQuery({
+    queryKey: ['presupuesto-disponible-oc', presupuestoIdForm],
+    queryFn: () => fetchDisponiblePresupuestoOrdenCompra(presupuestoIdForm),
+    enabled: Boolean(presupuestoIdForm),
+  })
+
+  const handleChangePresupuesto = async (value: string) => {
+    if (value === '__none__') {
+      await formik.setFieldValue('presupuestoId', '')
+      await formik.setFieldValue('productos', [])
+      return
+    }
+    await formik.setFieldValue('presupuestoId', value)
+    try {
+      const data = await queryClient.fetchQuery({
+        queryKey: ['presupuesto-disponible-oc', value],
+        queryFn: () => fetchDisponiblePresupuestoOrdenCompra(value),
+      })
+      const productos: LineaForm[] = data.lineas
+        .map((l) => ({
+          tipoPalletId: l.tipoPalletId,
+          cantidad: Math.min(l.cantidadPresupuesto, l.cantidadDisponible),
+          precioUnitario: l.precioUnitarioPresupuesto,
+          presupuestoLineaId: l.presupuestoLineaId,
+        }))
+        .filter((p) => p.cantidad > 0)
+      await formik.setFieldValue('productos', productos)
+      if (productos.length === 0) {
+        toast.info('Sin cantidad disponible en las líneas de este presupuesto para una nueva OC.')
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudo cargar el presupuesto'
+      toast.error(msg)
+      await formik.setFieldValue('presupuestoId', '')
+      await formik.setFieldValue('productos', [])
+    }
+  }
+
   const agregarProducto = () => {
     formik.setFieldValue('productos', [
       ...formik.values.productos,
@@ -144,6 +211,7 @@ export default function NuevaOrdenCompraPage() {
         tipoPalletId: '',
         cantidad: 0,
         precioUnitario: 0,
+        presupuestoLineaId: null,
       },
     ])
   }
@@ -234,6 +302,34 @@ export default function NuevaOrdenCompraPage() {
                   )}
                 </div>
 
+                <div>
+                  <Label htmlFor="presupuestoOc" className="text-sm font-semibold">
+                    Presupuesto (opcional)
+                  </Label>
+                  <Select
+                    value={formik.values.presupuestoId?.trim() ? formik.values.presupuestoId : '__none__'}
+                    onValueChange={(value) => {
+                      void handleChangePresupuesto(value)
+                    }}
+                  >
+                    <SelectTrigger id="presupuestoOc" className="mt-2" type="button">
+                      <SelectValue placeholder="Sin presupuesto" />
+                    </SelectTrigger>
+                    <SelectContent className="z-200">
+                      <SelectItem value="__none__">Sin presupuesto</SelectItem>
+                      {presupuestosLista.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.numero} · {p.estado}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Presupuestos enviados o aceptados. Otras órdenes no canceladas descuentan el disponible. El
+                    precio unitario sigue siendo editable.
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="fecha" className="text-sm font-semibold">
@@ -297,12 +393,33 @@ export default function NuevaOrdenCompraPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
+                {presupuestoIdForm && disponibleData ? (
+                  <div
+                    className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm"
+                    role="status"
+                  >
+                    <span className="text-muted-foreground">
+                      Cliente:{' '}
+                      <span className="font-medium text-foreground">
+                        {disponibleData.presupuesto.cliente.razonSocial}
+                      </span>
+                    </span>
+                    <Badge variant="outline">{disponibleData.presupuesto.numero}</Badge>
+                    {computeAgotaPresupuestoConEstaOrden(disponibleData.lineas, formik.values.productos) ? (
+                      <Badge>Con esta OC se agota el presupuesto</Badge>
+                    ) : (
+                      <Badge variant="secondary">Cobertura parcial — queda saldo en el presupuesto</Badge>
+                    )}
+                  </div>
+                ) : null}
+
                 {formik.values.productos.length > 0 ? (
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr className="border-b">
                           <th className="text-left p-3 font-semibold min-w-48">Pallet *</th>
+                          <th className="text-left p-3 font-semibold whitespace-nowrap">Presup. / disp.</th>
                           <th className="text-left p-3 font-semibold">Cantidad *</th>
                           <th className="text-left p-3 font-semibold">Precio Unit. *</th>
                           <th className="text-left p-3 font-semibold">Subtotal</th>
@@ -312,14 +429,21 @@ export default function NuevaOrdenCompraPage() {
                       <tbody>
                         {formik.values.productos.map((producto, index) => {
                           const tipoSel = findTipoPalletCatalogoOc(tiposPallet, producto.tipoPalletId)
+                          const metaLinea = producto.presupuestoLineaId
+                            ? disponibleData?.lineas.find(
+                                (l) => l.presupuestoLineaId === producto.presupuestoLineaId
+                              )
+                            : undefined
+                          const maxCant = metaLinea?.cantidadDisponible
                           return (
                           <tr key={index} className="border-b hover:bg-accent/50 transition-colors">
                             <td className="p-3 align-top">
                               <Select
                                 value={producto.tipoPalletId || undefined}
-                                onValueChange={(value) =>
-                                  formik.setFieldValue(`productos.${index}.tipoPalletId`, value)
-                                }
+                                onValueChange={(value) => {
+                                  void formik.setFieldValue(`productos.${index}.tipoPalletId`, value)
+                                  void formik.setFieldValue(`productos.${index}.presupuestoLineaId`, null)
+                                }}
                               >
                                 <SelectTrigger className="h-10 w-full min-w-44 max-w-md">
                                   <TipoPalletSelectTriggerResumen tipo={tipoSel} />
@@ -346,19 +470,33 @@ export default function NuevaOrdenCompraPage() {
                                   </p>
                                 )}
                             </td>
+                            <td className="p-3 align-top text-xs text-muted-foreground whitespace-nowrap">
+                              {metaLinea ? (
+                                <>
+                                  <span className="block">P: {metaLinea.cantidadPresupuesto}</span>
+                                  <span className="block">Disp.: {metaLinea.cantidadDisponible}</span>
+                                </>
+                              ) : (
+                                <span>—</span>
+                              )}
+                            </td>
                             <td className="p-3 align-top">
                               <Input
                                 type="number"
                                 inputMode="numeric"
                                 value={producto.cantidad || ''}
-                                onChange={(e) =>
-                                  formik.setFieldValue(
-                                    `productos.${index}.cantidad`,
-                                    parseInt(e.target.value, 10) || 0
-                                  )
-                                }
+                                onChange={(e) => {
+                                  const raw = parseInt(e.target.value, 10) || 0
+                                  const next =
+                                    maxCant != null
+                                      ? Math.min(Math.max(1, raw), maxCant)
+                                      : Math.max(1, raw)
+                                  void formik.setFieldValue(`productos.${index}.cantidad`, next)
+                                }}
                                 className="w-28"
                                 min={1}
+                                max={maxCant != null ? maxCant : undefined}
+                                aria-label={`Cantidad línea ${index + 1}${maxCant != null ? `, máximo ${maxCant}` : ''}`}
                               />
                             </td>
                             <td className="p-3 align-top">

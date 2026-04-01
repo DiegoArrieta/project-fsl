@@ -28,6 +28,7 @@ export interface OrdenCompraUi {
   pdfUrl: string | null
   observaciones: string | null
   operacionAsociada: { id: string; numero: string } | null
+  presupuesto: { id: string; numero: string } | null
 }
 
 interface ApiLinea {
@@ -55,6 +56,7 @@ interface ApiOrdenCompra {
   pdfUrl?: string | null
   proveedor?: { id: string; razonSocial: string; rut: string } | null
   operacion?: { id: string; numero: string } | null
+  presupuesto?: { id: string; numero: string; estado?: string } | null
   lineas?: ApiLinea[] | null
 }
 
@@ -112,5 +114,8 @@ export function mapOrdenCompraApiToUi(api: ApiOrdenCompra): OrdenCompraUi {
     pdfUrl: api.pdfUrl ?? null,
     observaciones: api.observaciones ?? null,
     operacionAsociada: api.operacion ? { id: api.operacion.id, numero: api.operacion.numero } : null,
+    presupuesto: api.presupuesto
+      ? { id: api.presupuesto.id, numero: api.presupuesto.numero }
+      : null,
   }
 }

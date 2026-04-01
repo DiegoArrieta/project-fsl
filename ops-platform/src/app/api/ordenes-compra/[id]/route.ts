@@ -3,6 +3,11 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { ordenCompraLineasConTipoPalletDetalle } from '@/lib/ordenes-compra/prisma-includes'
 import { updateOrdenCompraSchema } from '@/lib/validations/orden-compra'
+import {
+  assertProductosContraPresupuesto,
+  normalizarProductosSinPresupuesto,
+  OrdenCompraPresupuestoError,
+} from '@/lib/ordenes-compra/presupuesto-disponible'
 
 /**
  * GET /api/ordenes-compra/[id]
@@ -24,6 +29,7 @@ export async function GET(
             cliente: true,
           },
         },
+        presupuesto: { select: { id: true, numero: true, estado: true } },
         ...ordenCompraLineasConTipoPalletDetalle,
       },
     })
@@ -64,7 +70,13 @@ export async function PUT(
     const ordenExistente = await prisma.ordenCompra.findUnique({
       where: { id },
       include: {
-        lineas: true,
+        lineas: {
+          select: {
+            tipoPalletId: true,
+            cantidad: true,
+            presupuestoLineaId: true,
+          },
+        },
       },
     })
 
@@ -96,20 +108,64 @@ export async function PUT(
     if (validatedData.direccionEntrega !== undefined) updateData.direccionEntrega = validatedData.direccionEntrega
     if (validatedData.observaciones !== undefined) updateData.observaciones = validatedData.observaciones
     if (validatedData.operacionId !== undefined) updateData.operacionId = validatedData.operacionId
+    if (validatedData.presupuestoId !== undefined) updateData.presupuestoId = validatedData.presupuestoId
 
     // Si se actualizan productos, eliminar existentes y crear nuevos
     if (validatedData.productos) {
+      const presupuestoIdEfectivo =
+        validatedData.presupuestoId !== undefined
+          ? validatedData.presupuestoId
+          : ordenExistente.presupuestoId
+
+      const productosNormalizados = normalizarProductosSinPresupuesto(
+        presupuestoIdEfectivo,
+        validatedData.productos
+      )
+
+      if (presupuestoIdEfectivo) {
+        await assertProductosContraPresupuesto({
+          presupuestoId: presupuestoIdEfectivo,
+          productos: productosNormalizados,
+          excludeOrdenCompraId: id,
+        })
+      }
+
       await prisma.ordenCompraLinea.deleteMany({
         where: { ordenCompraId: id },
       })
 
       updateData.lineas = {
-        create: validatedData.productos.map((p: any) => ({
+        create: productosNormalizados.map((p) => ({
           tipoPalletId: p.tipoPalletId,
           cantidad: p.cantidad,
           precioUnitario: p.precioUnitario,
           descripcion: p.descripcion,
+          presupuestoLineaId: p.presupuestoLineaId ?? null,
         })),
+      }
+    }
+
+    if (validatedData.productos === undefined && validatedData.presupuestoId !== undefined) {
+      if (validatedData.presupuestoId === null) {
+        await prisma.ordenCompraLinea.updateMany({
+          where: { ordenCompraId: id },
+          data: { presupuestoLineaId: null },
+        })
+      } else {
+        const lineasActuales = ordenExistente.lineas.map((l) => ({
+          tipoPalletId: l.tipoPalletId,
+          cantidad: l.cantidad,
+          presupuestoLineaId: l.presupuestoLineaId,
+        }))
+        const productosNorm = normalizarProductosSinPresupuesto(
+          validatedData.presupuestoId,
+          lineasActuales
+        )
+        await assertProductosContraPresupuesto({
+          presupuestoId: validatedData.presupuestoId,
+          productos: productosNorm,
+          excludeOrdenCompraId: id,
+        })
       }
     }
 
@@ -120,6 +176,7 @@ export async function PUT(
       include: {
         proveedor: true,
         operacion: true,
+        presupuesto: { select: { id: true, numero: true, estado: true } },
         ...ordenCompraLineasConTipoPalletDetalle,
       },
     })
@@ -139,6 +196,10 @@ export async function PUT(
         },
         { status: 400 }
       )
+    }
+
+    if (error instanceof OrdenCompraPresupuestoError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 })
     }
 
     console.error('Error al actualizar orden de compra:', error)

@@ -182,6 +182,19 @@ export default function OrdenCompraDetallePage() {
                   <p className="font-medium">{oc.direccionEntrega}</p>
                 </div>
               )}
+              {oc.presupuesto ? (
+                <div>
+                  <span className="text-sm text-muted-foreground">Presupuesto:</span>
+                  <p className="font-medium">
+                    <Link
+                      href={`/presupuestos/${oc.presupuesto.id}`}
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      {oc.presupuesto.numero}
+                    </Link>
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
         </CardContent>
