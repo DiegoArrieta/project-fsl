@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.1-SNAPSHOT.9](https://github.com/DiegoArrieta/project-fsl/compare/v0.1.1-SNAPSHOT.8...v0.1.1-SNAPSHOT.9) (2026-04-01)
+
 ### [0.1.1-SNAPSHOT.8](https://github.com/DiegoArrieta/project-fsl/compare/v0.1.1-SNAPSHOT.7...v0.1.1-SNAPSHOT.8) (2026-04-01)
 
 ### [0.1.1-SNAPSHOT.7](https://github.com/DiegoArrieta/project-fsl/compare/v0.1.1-SNAPSHOT.6...v0.1.1-SNAPSHOT.7) (2026-04-01)
