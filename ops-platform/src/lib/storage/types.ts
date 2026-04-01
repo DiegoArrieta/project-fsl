@@ -16,6 +16,12 @@ export interface UploadDocumentOptions {
   keyPrefix?: string
 }
 
+/** Modifica URLs firmadas de S3 (sin efecto en mock ni URL pública fija). */
+export interface GetDocumentUrlOptions {
+  contentDisposition?: 'inline' | 'attachment'
+  downloadFilename?: string
+}
+
 export interface IStorageProvider {
   /**
    * Sube un archivo al storage
@@ -35,7 +41,7 @@ export interface IStorageProvider {
   /**
    * Obtiene la URL de un documento (puede ser signed URL)
    */
-  getDocumentUrl(key: string, expiresIn?: number): Promise<string>
+  getDocumentUrl(key: string, expiresIn?: number, options?: GetDocumentUrlOptions): Promise<string>
 
   /**
    * Verifica si un documento existe

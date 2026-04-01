@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2 } from 'lucide-react'
+import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
@@ -22,6 +22,7 @@ import type {
 import { RegistrarPagoDialog } from '@/components/operaciones/RegistrarPagoDialog'
 import { RegistrarFactoringDialog } from '@/components/operaciones/RegistrarFactoringDialog'
 import { AdjuntarDocumentoDialog } from '@/components/operaciones/AdjuntarDocumentoDialog'
+import { DocumentoVisualizarDialog } from '@/components/operaciones/DocumentoVisualizarDialog'
 
 async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
   const response = await fetch(`/api/operaciones/${id}`)
@@ -321,7 +322,7 @@ export default function OperacionDetallePage() {
                   return (
                     <div
                       key={doc.id}
-                      className={`flex items-center justify-between p-3 rounded-md border ${
+                      className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-md border ${
                         presente ? 'bg-background' : 'bg-destructive/10 border-destructive'
                       }`}
                     >
@@ -332,11 +333,40 @@ export default function OperacionDetallePage() {
                           {doc.numeroDocumento && (
                             <p className="text-sm text-muted-foreground">N° {doc.numeroDocumento}</p>
                           )}
+                          {doc.archivoNombre && (
+                            <p className="text-xs text-muted-foreground truncate" title={doc.archivoNombre}>
+                              {doc.archivoNombre}
+                            </p>
+                          )}
                           {!presente && (
                             <p className="text-sm text-destructive">Sin archivo adjunto</p>
                           )}
                         </div>
                       </div>
+                      {presente && (
+                        <div className="flex shrink-0 gap-2 sm:ml-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => setDocumentoVisualizar(doc)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" aria-hidden />
+                            Ver
+                          </Button>
+                          <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
+                            <a
+                              href={`/api/documentos/${doc.id}/archivo?download=1`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Descargar ${doc.archivoNombre ?? 'documento'}`}
+                            >
+                              Descargar
+                            </a>
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )
                 })
@@ -403,6 +433,14 @@ export default function OperacionDetallePage() {
           onOpenChange={setAdjuntarDocumentoOpen}
           onGuardado={() => {
             queryClient.invalidateQueries({ queryKey: ['operacion', id] })
+          }}
+        />
+
+        <DocumentoVisualizarDialog
+          documento={documentoVisualizar}
+          open={documentoVisualizar !== null}
+          onOpenChange={(o) => {
+            if (!o) setDocumentoVisualizar(null)
           }}
         />
 

@@ -9,9 +9,15 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
+  type GetObjectCommandInput,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { IStorageProvider, UploadResult, UploadDocumentOptions } from './types'
+import {
+  IStorageProvider,
+  UploadResult,
+  UploadDocumentOptions,
+  GetDocumentUrlOptions,
+} from './types'
 
 /** Segmento raíz del objeto en S3: local (desarrollo) vs prod (NODE_ENV=production). */
 function getS3EnvironmentSegment(): 'local' | 'prod' {
@@ -119,17 +125,27 @@ export class S3StorageProvider implements IStorageProvider {
     )
   }
 
-  async getDocumentUrl(stored: string, expiresIn = 3600): Promise<string> {
+  async getDocumentUrl(
+    stored: string,
+    expiresIn = 3600,
+    options?: GetDocumentUrlOptions
+  ): Promise<string> {
     const key = parseStoredKey(stored)
     const publicBase = process.env.AWS_S3_PUBLIC_BASE_URL?.replace(/\/$/, '')
     if (publicBase) {
       return `${publicBase}/${encodeURI(key)}`
     }
-    return getSignedUrl(
-      this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn }
-    )
+    const attachment =
+      options?.contentDisposition === 'attachment' && options.downloadFilename
+    const input: GetObjectCommandInput = {
+      Bucket: this.bucket,
+      Key: key,
+    }
+    if (attachment) {
+      const name = options.downloadFilename!.replace(/["\\]/g, '_')
+      input.ResponseContentDisposition = `attachment; filename="${name}"`
+    }
+    return getSignedUrl(this.client, new GetObjectCommand(input), { expiresIn })
   }
 
   async documentExists(stored: string): Promise<boolean> {

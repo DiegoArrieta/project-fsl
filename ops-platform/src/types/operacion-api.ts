@@ -22,6 +22,8 @@ export interface DocumentoOperacionApi {
   tipo: string
   numeroDocumento?: string | null
   archivoUrl?: string | null
+  archivoNombre?: string | null
+  archivoTipo?: string | null
   presente?: boolean
 }
 

@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { getStorageProvider } from '@/lib/storage'
 
 /**
  * GET /api/documentos/[id]/descargar
- * Descarga un documento (archivo subido)
+ * Devuelve JSON con URL para descargar el archivo (signed URL o ruta mock).
  */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
     const { id } = await params
 
     // Obtener documento
