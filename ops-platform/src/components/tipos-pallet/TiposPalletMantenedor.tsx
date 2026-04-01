@@ -34,9 +34,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Search, Plus, Loader2, Pencil, Package, Globe, ImageIcon, X } from 'lucide-react'
+import { Search, Plus, Loader2, Pencil, Package, Globe, ImageIcon, X, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { useFileUpload } from '@/hooks/use-file-upload'
+import { PalletFotoVisualizarDialog } from '@/components/tipos-pallet/PalletFotoVisualizarDialog'
 
 interface PaisRef {
   id: string
@@ -126,6 +127,7 @@ export function TiposPalletMantenedor() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editando, setEditando] = useState<TipoPalletRow | null>(null)
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null)
+  const [fotoModalRow, setFotoModalRow] = useState<TipoPalletRow | null>(null)
   const fotoInputRef = useRef<HTMLInputElement>(null)
 
   const { upload: uploadFoto, isUploading: isFotoUploading } = useFileUpload({
@@ -395,14 +397,33 @@ export function TiposPalletMantenedor() {
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="w-14">
+                  <TableCell className="w-24">
                     {row.fotoKey ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={`/api/tipos-pallet/${row.id}/foto`}
-                        alt=""
-                        className="h-10 w-10 rounded object-cover border bg-muted"
-                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setFotoModalRow(row)}
+                          className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={`Ver foto ampliada de ${row.nombre}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/tipos-pallet/${row.id}/foto`}
+                            alt=""
+                            className="h-10 w-10 rounded object-cover border bg-muted hover:opacity-90 transition-opacity"
+                          />
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setFotoModalRow(row)}
+                          aria-label={`Abrir visor de foto: ${row.nombre}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground text-xs">—</span>
                     )}
@@ -694,6 +715,23 @@ export function TiposPalletMantenedor() {
           </FormikProvider>
         </DialogContent>
       </Dialog>
+
+      <PalletFotoVisualizarDialog
+        row={
+          fotoModalRow
+            ? {
+                id: fotoModalRow.id,
+                codigo: fotoModalRow.codigo,
+                nombre: fotoModalRow.nombre,
+                fotoNombre: fotoModalRow.fotoNombre,
+              }
+            : null
+        }
+        open={fotoModalRow !== null}
+        onOpenChange={(o) => {
+          if (!o) setFotoModalRow(null)
+        }}
+      />
     </div>
   )
 }
