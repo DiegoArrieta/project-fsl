@@ -4,6 +4,27 @@
 
 import { z } from 'zod'
 
+/** FormData devuelve `null` si el campo no va en el multipart; Zod `.optional()` espera `undefined`. */
+function optionalFormString(maxLen: number) {
+  return z.preprocess(
+    (val) => {
+      if (val == null || val === '') return undefined
+      const s = String(val).trim()
+      return s === '' ? undefined : s
+    },
+    z.string().max(maxLen).optional()
+  )
+}
+
+function optionalFormUnitCount() {
+  return z.preprocess((val) => {
+    if (val == null || val === '') return undefined
+    const n = typeof val === 'number' ? val : parseInt(String(val), 10)
+    if (Number.isNaN(n)) return undefined
+    return n
+  }, z.number().int().min(0).optional())
+}
+
 // Schema para crear documento
 export const createDocumentoSchema = z.object({
   operacionId: z.string().uuid({ message: 'ID de operación es requerido' }),
@@ -16,17 +37,31 @@ export const createDocumentoSchema = z.object({
     'CERTIFICADO_NIMF15',
     'OTRO',
   ] as const),
-  numeroDocumento: z.string().optional(),
-  fechaDocumento: z.string().or(z.date()).optional(),
-  observaciones: z.string().optional(),
+  numeroDocumento: optionalFormString(50),
+  fechaDocumento: z.preprocess(
+    (val) => {
+      if (val == null || val === '') return undefined
+      const s = String(val).trim()
+      return s === '' ? undefined : s
+    },
+    z.union([z.string(), z.date()]).optional()
+  ),
+  observaciones: z.preprocess(
+    (val) => {
+      if (val == null || val === '') return undefined
+      const s = String(val).trim()
+      return s === '' ? undefined : s
+    },
+    z.string().optional()
+  ),
   esObligatorio: z.boolean().default(true),
-  // Datos de transporte (para guías)
-  choferNombre: z.string().optional(),
-  choferRut: z.string().optional(),
-  vehiculoPatente: z.string().optional(),
-  transportista: z.string().optional(),
-  cantidadDocumento: z.number().int().min(0).optional(),
-  cantidadDanada: z.number().int().min(0).optional(),
+  // Datos de transporte (para guías; todos opcionales)
+  choferNombre: optionalFormString(100),
+  choferRut: optionalFormString(12),
+  vehiculoPatente: optionalFormString(10),
+  transportista: optionalFormString(255),
+  cantidadDocumento: optionalFormUnitCount(),
+  cantidadDanada: optionalFormUnitCount(),
 })
 
 // Schema para actualizar documento
