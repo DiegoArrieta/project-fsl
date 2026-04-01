@@ -1,97 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { getStorageProvider } from '@/lib/storage'
 
 /**
  * GET /api/documentos/[id]/descargar
- * Devuelve JSON con URL para descargar el archivo (signed URL o ruta mock).
+ * Mantiene compatibilidad: redirige a GET /api/documentos/[id]/archivo?download=1.
+ * La vista previa y la descarga comparten esa ruta; el presign (o mock) se resuelve allí en cada petición.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
-    }
-
-    const { id } = await params
-
-    // Obtener documento
-    const documento = await prisma.documento.findUnique({
-      where: { id },
-      include: {
-        operacion: {
-          select: {
-            numero: true,
-          },
-        },
-      },
-    })
-
-    if (!documento) {
-      return NextResponse.json(
-        { success: false, error: 'Documento no encontrado' },
-        { status: 404 }
-      )
-    }
-
-    // Obtener storage provider
-    const storage = getStorageProvider()
-
-    try {
-      // Obtener URL del documento (en mocks, será una URL local; en S3, será signed URL)
-      const url = await storage.getDocumentUrl(documento.archivoUrl)
-
-      // Para mocks, podríamos retornar la URL directamente
-      // Para S3, retornaríamos una signed URL
-
-      // Por ahora, en desarrollo con mocks, retornamos un redirect a la URL
-      // En producción con S3, esto funcionará con signed URLs
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: documento.id,
-          tipo: documento.tipo,
-          nombre: documento.archivoNombre,
-          url,
-          operacion: documento.operacion.numero,
-          downloadUrl: url,
-        },
-        message: 'Use el campo "downloadUrl" para descargar el archivo',
-      })
-    } catch (error) {
-      console.error('Error al obtener URL del documento:', error)
-
-      // Si falla obtener del storage, retornamos la info que tenemos
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: documento.id,
-          tipo: documento.tipo,
-          nombre: documento.archivoNombre,
-          size: Number(documento.archivoSize),
-          contentType: documento.archivoTipo,
-          operacion: documento.operacion.numero,
-          uploadedAt: documento.uploadedAt,
-        },
-        message:
-          'Archivo en storage mock. En producción con S3, aquí se generaría una signed URL.',
-      })
-    }
-  } catch (error) {
-    console.error('Error al descargar documento:', error)
-    return NextResponse.json(
-      { success: false, error: 'Error al descargar documento' },
-      { status: 500 }
-    )
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
+
+  const { id } = await params
+  const dest = new URL(request.url)
+  dest.pathname = `/api/documentos/${id}/archivo`
+  dest.search = ''
+  dest.searchParams.set('download', '1')
+  return NextResponse.redirect(dest, 307)
 }
-
-
-
-
-

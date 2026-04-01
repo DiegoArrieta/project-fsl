@@ -35,6 +35,7 @@ export function DocumentoVisualizarDialog({
     if (open && documento) setCacheBust(Date.now())
   }, [open, documento?.id])
 
+  /** Vista y descarga: misma ruta API; el servidor genera presign (o sirve mock) por request. */
   const viewSrc = useMemo(() => {
     if (!documento?.id) return ''
     return `/api/documentos/${documento.id}/archivo?t=${cacheBust}`

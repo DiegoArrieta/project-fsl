@@ -12,9 +12,9 @@ function contentDispositionAttachment(filename: string): string {
 }
 
 /**
- * GET /api/documentos/[id]/archivo
- * Redirige a URL firmada (S3) o sirve el binario (mock) para visualizar/descargar.
- * ?download=1 fuerza descarga cuando el storage lo permite.
+ * GET /api/documentos/[id]/archivo — único punto para vista y descarga.
+ * Sin query: inline (iframe/img). ?download=1: attachment.
+ * En cada petición autenticada: presign fresco (S3) o binario (mock); el cliente nunca recibe la key ni el presign por JSON.
  */
 export async function GET(
   request: NextRequest,
