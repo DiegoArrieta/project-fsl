@@ -6,7 +6,6 @@ import * as Yup from 'yup'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -141,7 +140,7 @@ export function AdjuntarDocumentoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-w-lg max-h-[90vh] overflow-y-auto"
-        aria-describedby="adj-doc-desc"
+        aria-describedby={undefined}
       >
         <FormikProvider value={formik}>
           <form onSubmit={formik.handleSubmit} className="space-y-4">
@@ -150,11 +149,6 @@ export function AdjuntarDocumentoDialog({
                 <Upload className="h-5 w-5" aria-hidden />
                 Adjuntar documento
               </DialogTitle>
-              <DialogDescription id="adj-doc-desc">
-                El archivo se procesa con el storage configurado (por defecto{' '}
-                <strong>mock</strong> en desarrollo; en producción será S3 con{' '}
-                <code className="text-xs">USE_MOCK_STORAGE=false</code>).
-              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-2">
