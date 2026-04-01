@@ -44,6 +44,7 @@ export default function OperacionDetallePage() {
   const [registrarPagoOpen, setRegistrarPagoOpen] = useState(false)
   const [factoringDialogOpen, setFactoringDialogOpen] = useState(false)
   const [adjuntarDocumentoOpen, setAdjuntarDocumentoOpen] = useState(false)
+  const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoOperacionApi | null>(null)
 
   const {
     data: operacion,
