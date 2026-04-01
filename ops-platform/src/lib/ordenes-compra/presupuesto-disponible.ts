@@ -9,6 +9,8 @@ export class OrdenCompraPresupuestoError extends Error {
 
 /**
  * Suma cantidades ya pedidas por línea de presupuesto en órdenes no canceladas.
+ * Usa la relación línea OC → línea presupuesto → presupuesto (no solo orden_compra.presupuesto_id),
+ * para incluir toda OC que cite esa línea de presupuesto.
  */
 export async function getComprometidoPorPresupuestoLineaId(
   presupuestoId: string,
@@ -17,8 +19,8 @@ export async function getComprometidoPorPresupuestoLineaId(
   const lineas = await prisma.ordenCompraLinea.findMany({
     where: {
       presupuestoLineaId: { not: null },
+      presupuestoLinea: { presupuestoId },
       ordenCompra: {
-        presupuestoId,
         estado: { not: 'CANCELADA' },
         ...(excludeOrdenCompraId ? { id: { not: excludeOrdenCompraId } } : {}),
       },

@@ -55,6 +55,36 @@ export async function GET(
     const excludeId = request.nextUrl.searchParams.get('excludeOrdenCompraId') ?? undefined
     const comprometido = await getComprometidoPorPresupuestoLineaId(presupuestoId, excludeId)
 
+    const ordenesAsociadasRaw = await prisma.ordenCompra.findMany({
+      where: {
+        estado: { not: 'CANCELADA' },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        lineas: {
+          some: {
+            presupuestoLineaId: { not: null },
+            presupuestoLinea: { presupuestoId },
+          },
+        },
+      },
+      select: {
+        id: true,
+        numero: true,
+        estado: true,
+        fecha: true,
+        proveedor: { select: { razonSocial: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+
+    const ordenesAsociadas = ordenesAsociadasRaw.map((o) => ({
+      id: o.id,
+      numero: o.numero,
+      estado: o.estado,
+      fecha:
+        o.fecha instanceof Date ? o.fecha.toISOString().slice(0, 10) : String(o.fecha).slice(0, 10),
+      proveedorRazonSocial: o.proveedor?.razonSocial ?? null,
+    }))
+
     const lineas = presupuesto.lineas.map((l) => {
       const comp = comprometido.get(l.id) ?? 0
       return {
@@ -80,6 +110,7 @@ export async function GET(
           cliente: presupuesto.cliente,
         },
         lineas,
+        ordenesAsociadas,
       },
     })
   } catch (error) {

@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { PresupuestoOrdenesAsociadasAlert } from '@/components/ordenes-compra/presupuesto-ordenes-asociadas-alert'
 import { ArrowLeft, Plus, Trash2, Save, FileText, Package, DollarSign, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -187,7 +188,7 @@ export default function NuevaOrdenCompraPage() {
       const productos: LineaForm[] = data.lineas
         .map((l) => ({
           tipoPalletId: l.tipoPalletId,
-          cantidad: Math.min(l.cantidadPresupuesto, l.cantidadDisponible),
+          cantidad: l.cantidadDisponible,
           precioUnitario: l.precioUnitarioPresupuesto,
           presupuestoLineaId: l.presupuestoLineaId,
         }))
@@ -411,6 +412,13 @@ export default function NuevaOrdenCompraPage() {
                       <Badge variant="secondary">Cobertura parcial — queda saldo en el presupuesto</Badge>
                     )}
                   </div>
+                ) : null}
+
+                {presupuestoIdForm && disponibleData ? (
+                  <PresupuestoOrdenesAsociadasAlert
+                    ordenes={disponibleData.ordenesAsociadas ?? []}
+                    presupuestoNumero={disponibleData.presupuesto.numero}
+                  />
                 ) : null}
 
                 {formik.values.productos.length > 0 ? (

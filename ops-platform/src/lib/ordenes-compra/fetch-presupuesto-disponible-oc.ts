@@ -8,6 +8,14 @@ export interface DisponiblePresupuestoLinea {
   cantidadDisponible: number
 }
 
+export interface OrdenCompraAsociadaPresupuesto {
+  id: string
+  numero: string
+  estado: string
+  fecha: string
+  proveedorRazonSocial: string | null
+}
+
 export interface DisponiblePresupuestoResponse {
   presupuesto: {
     id: string
@@ -17,6 +25,7 @@ export interface DisponiblePresupuestoResponse {
     cliente: { id: string; razonSocial: string }
   }
   lineas: DisponiblePresupuestoLinea[]
+  ordenesAsociadas: OrdenCompraAsociadaPresupuesto[]
 }
 
 export async function fetchDisponiblePresupuestoOrdenCompra(

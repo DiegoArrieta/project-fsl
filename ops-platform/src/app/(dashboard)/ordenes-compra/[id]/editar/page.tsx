@@ -27,6 +27,7 @@ import {
   type LineaFormConPresupuesto,
 } from '@/lib/ordenes-compra/fetch-presupuesto-disponible-oc'
 import { Badge } from '@/components/ui/badge'
+import { PresupuestoOrdenesAsociadasAlert } from '@/components/ordenes-compra/presupuesto-ordenes-asociadas-alert'
 
 interface ProveedorOption {
   id: string
@@ -349,6 +350,13 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                     <Badge variant="secondary">Cobertura parcial — queda saldo en el presupuesto</Badge>
                   )}
                 </div>
+              ) : null}
+
+              {presupuestoIdTrim && disponibleData ? (
+                <PresupuestoOrdenesAsociadasAlert
+                  ordenes={disponibleData.ordenesAsociadas ?? []}
+                  presupuestoNumero={disponibleData.presupuesto.numero}
+                />
               ) : null}
 
               {formik.values.productos.length > 0 ? (
