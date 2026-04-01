@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { SequenceService } from '../../sequences/sequence.service'
 import { PresupuestoEntity } from '../domain/presupuesto.entity'
 import { PresupuestoLineaEntity } from '../domain/presupuesto-linea.entity'
-import { TipoOperacion, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 /**
  * Use Case: Aceptar Presupuesto
@@ -61,6 +61,7 @@ export class AceptarPresupuestoUseCase {
           lineas: {
             create: presupuesto.lineas.map((linea) => ({
               tipoPalletId: linea.tipoPalletId,
+              presupuestoLineaId: linea.id,
               cantidad: linea.cantidad,
               precioVentaUnitario: linea.precioUnitario,
               descripcionProducto: linea.descripcion || null,

@@ -24,6 +24,7 @@ import { createPresupuestoSchema, type CreatePresupuestoDto } from '@/modules/pr
 import { Textarea } from '@/components/ui/textarea'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { Plus, Trash2, Calculator } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TipoPalletSelectItemBody } from '@/components/ordenes-compra/tipo-pallet-select-item-body'
@@ -39,6 +40,8 @@ interface PresupuestoFormProps {
   onSubmit: (data: CreatePresupuestoDto) => Promise<void>
   onCancel: () => void
   isLoading?: boolean
+  /** Botones adicionales junto a Guardar/Cancelar (p. ej. aceptar desde edición) */
+  footerExtra?: ReactNode
 }
 
 /**
@@ -62,6 +65,7 @@ export function PresupuestoForm({
   onSubmit,
   onCancel,
   isLoading = false,
+  footerExtra,
 }: PresupuestoFormProps) {
   const {
     data: clientesData,
@@ -449,7 +453,8 @@ export function PresupuestoForm({
                     </div>
                   </div>
                 </div>
-                <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:justify-end xl:w-auto">
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end xl:w-auto">
+                  {footerExtra ? <div className="flex w-full justify-end sm:w-auto">{footerExtra}</div> : null}
                   <Button type="submit" size="sm" disabled={isLoading} className="sm:min-w-40">
                     {isLoading ? 'Guardando...' : 'Guardar Presupuesto'}
                   </Button>

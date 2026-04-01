@@ -9,6 +9,7 @@ import {
   normalizarProductosSinPresupuesto,
   OrdenCompraPresupuestoError,
 } from '@/lib/ordenes-compra/presupuesto-disponible'
+import { resolveOperacionIdFromPresupuestoId } from '@/lib/ordenes-compra/operacion-from-presupuesto'
 
 /**
  * GET /api/ordenes-compra
@@ -111,6 +112,10 @@ export async function POST(request: NextRequest) {
     })
     const numero = generarNumeroOrdenCompra(ultimaOrden?.numero || null)
 
+    const operacionId = presupuestoId
+      ? await resolveOperacionIdFromPresupuestoId(presupuestoId)
+      : validatedData.operacionId ?? null
+
     // Preparar datos para crear
     const ordenData: any = {
       numero,
@@ -119,7 +124,8 @@ export async function POST(request: NextRequest) {
       fechaEntrega: validatedData.fechaEntrega ? new Date(validatedData.fechaEntrega) : null,
       direccionEntrega: validatedData.direccionEntrega,
       observaciones: validatedData.observaciones,
-      operacionId: validatedData.operacionId,
+      operacionId,
+      presupuestoId: presupuestoId,
       estado: 'BORRADOR',
       pdfGenerado: false,
     }
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest) {
       include: {
         proveedor: true,
         operacion: true,
+        presupuesto: { select: { id: true, numero: true, estado: true } },
         ...ordenCompraLineasConTipoPalletDetalle,
       },
     })

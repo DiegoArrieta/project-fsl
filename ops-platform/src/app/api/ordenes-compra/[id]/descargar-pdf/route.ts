@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { generarPDFOrdenCompra } from '@/lib/ordenes-compra/pdf'
+import { generarPDFOrdenCompra, guardarPDF } from '@/lib/ordenes-compra/pdf'
 import { ordenCompraLineasConTipoPalletDetalle } from '@/lib/ordenes-compra/prisma-includes'
 import { formatTipoPalletAtributosLineaDesdeInput } from '@/lib/tipos-pallet/orden-compra-catalogo'
 
@@ -95,6 +95,18 @@ export async function GET(
 
     // Generar PDF
     const pdfBlob = await generarPDFOrdenCompra(datosPDF)
+
+    if (ordenCompra.estado === 'BORRADOR') {
+      const pdfUrl = await guardarPDF(pdfBlob, ordenCompra.numero)
+      await prisma.ordenCompra.update({
+        where: { id },
+        data: {
+          pdfGenerado: true,
+          pdfUrl,
+          estado: 'ENVIADA',
+        },
+      })
+    }
 
     // Convertir blob a buffer
     const buffer = Buffer.from(await pdfBlob.arrayBuffer())

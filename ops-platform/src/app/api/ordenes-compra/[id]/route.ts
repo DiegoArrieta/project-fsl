@@ -8,6 +8,7 @@ import {
   normalizarProductosSinPresupuesto,
   OrdenCompraPresupuestoError,
 } from '@/lib/ordenes-compra/presupuesto-disponible'
+import { resolveOperacionIdFromPresupuestoId } from '@/lib/ordenes-compra/operacion-from-presupuesto'
 
 /**
  * GET /api/ordenes-compra/[id]
@@ -107,7 +108,6 @@ export async function PUT(
     }
     if (validatedData.direccionEntrega !== undefined) updateData.direccionEntrega = validatedData.direccionEntrega
     if (validatedData.observaciones !== undefined) updateData.observaciones = validatedData.observaciones
-    if (validatedData.operacionId !== undefined) updateData.operacionId = validatedData.operacionId
     if (validatedData.presupuestoId !== undefined) updateData.presupuestoId = validatedData.presupuestoId
 
     // Si se actualizan productos, eliminar existentes y crear nuevos
@@ -167,6 +167,24 @@ export async function PUT(
           excludeOrdenCompraId: id,
         })
       }
+    }
+
+    const presupuestoTocado = validatedData.presupuestoId !== undefined
+    const presupuestoIdEfectivo = presupuestoTocado
+      ? validatedData.presupuestoId
+      : ordenExistente.presupuestoId
+
+    let operacionIdActualizado: string | null | undefined
+    if (presupuestoIdEfectivo) {
+      operacionIdActualizado = await resolveOperacionIdFromPresupuestoId(presupuestoIdEfectivo)
+    } else if (presupuestoTocado && validatedData.presupuestoId === null) {
+      operacionIdActualizado = null
+    } else if (validatedData.operacionId !== undefined) {
+      operacionIdActualizado = validatedData.operacionId
+    }
+
+    if (operacionIdActualizado !== undefined) {
+      updateData.operacionId = operacionIdActualizado
     }
 
     // Actualizar orden

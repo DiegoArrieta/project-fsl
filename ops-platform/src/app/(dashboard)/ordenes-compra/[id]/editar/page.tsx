@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useFormik, FormikProvider } from 'formik'
 import * as Yup from 'yup'
@@ -34,7 +35,13 @@ interface ProveedorOption {
   razonSocial: string
 }
 
-interface LineaForm extends LineaFormConPresupuesto {}
+interface PresupuestoListItem {
+  id: string
+  numero: string
+  estado: string
+}
+
+type LineaForm = LineaFormConPresupuesto
 
 interface OrdenCompraApiParaEditar {
   id: string
@@ -52,7 +59,50 @@ interface OrdenCompraApiParaEditar {
     cantidad: number
     precioUnitario: unknown
     presupuestoLineaId?: string | null
+    presupuestoLinea?: {
+      id: string
+      presupuestoId: string
+      presupuesto: { id: string; numero: string; estado: string }
+    } | null
   }>
+}
+
+function resolverPresupuestoEdicion(orden: OrdenCompraApiParaEditar): {
+  presupuestoId: string
+  presupuestoResumen: PresupuestoListItem | null
+} {
+  const head = orden.presupuestoId?.trim()
+  if (head) {
+    return {
+      presupuestoId: head,
+      presupuestoResumen: orden.presupuesto
+        ? { id: orden.presupuesto.id, numero: orden.presupuesto.numero, estado: orden.presupuesto.estado }
+        : null,
+    }
+  }
+  for (const l of orden.lineas ?? []) {
+    const pl = l.presupuestoLinea
+    if (pl?.presupuestoId) {
+      return {
+        presupuestoId: pl.presupuestoId,
+        presupuestoResumen: pl.presupuesto
+          ? { id: pl.presupuesto.id, numero: pl.presupuesto.numero, estado: pl.presupuesto.estado }
+          : null,
+      }
+    }
+  }
+  return { presupuestoId: '', presupuestoResumen: null }
+}
+
+async function fetchPresupuestosParaOc(): Promise<PresupuestoListItem[]> {
+  const response = await fetch('/api/presupuestos?pageSize=500', { credentials: 'include' })
+  const json = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const msg = typeof json.error === 'string' ? json.error : `Error al cargar presupuestos (${response.status})`
+    throw new Error(msg)
+  }
+  const data = Array.isArray(json.data) ? (json.data as PresupuestoListItem[]) : []
+  return data.filter((p) => p.estado === 'ENVIADO' || p.estado === 'ACEPTADO')
 }
 
 async function fetchProveedoresActivos(): Promise<ProveedorOption[]> {
@@ -107,16 +157,35 @@ interface EditarOrdenFormProps {
   orden: OrdenCompraApiParaEditar
   proveedores: ProveedorOption[]
   tiposPallet: TipoPalletCatalogoOc[]
+  presupuestosLista: PresupuestoListItem[]
 }
 
-function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: EditarOrdenFormProps) {
+function EditarOrdenCompraForm({
+  ordenId,
+  orden,
+  proveedores,
+  tiposPallet,
+  presupuestosLista,
+}: EditarOrdenFormProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
+
+  const presupuestoInicial = resolverPresupuestoEdicion(orden)
+
+  const presupuestosOpciones = useMemo(() => {
+    const inicial = resolverPresupuestoEdicion(orden)
+    const ids = new Set(presupuestosLista.map((p) => p.id))
+    const out = [...presupuestosLista]
+    if (inicial.presupuestoResumen && !ids.has(inicial.presupuestoResumen.id)) {
+      out.unshift(inicial.presupuestoResumen)
+    }
+    return out
+  }, [presupuestosLista, orden])
 
   const formik = useFormik({
     initialValues: {
       proveedorId: orden.proveedorId,
-      presupuestoId: orden.presupuestoId ?? '',
+      presupuestoId: presupuestoInicial.presupuestoId,
       fecha: toInputDate(orden.fecha),
       fechaEntregaEsperada: toInputDate(orden.fechaEntrega),
       direccionEntrega: orden.direccionEntrega ?? '',
@@ -203,6 +272,41 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
     enabled: Boolean(presupuestoIdTrim),
   })
 
+  const handleChangePresupuesto = async (value: string) => {
+    const previousId = formik.values.presupuestoId?.trim() ?? ''
+    if (value === '__none__') {
+      await formik.setFieldValue('presupuestoId', '')
+      await formik.setFieldValue(
+        'productos',
+        formik.values.productos.map((p) => ({ ...p, presupuestoLineaId: null }))
+      )
+      return
+    }
+    await formik.setFieldValue('presupuestoId', value)
+    try {
+      const data = await queryClient.fetchQuery({
+        queryKey: ['presupuesto-disponible-oc', value, ordenId],
+        queryFn: () => fetchDisponiblePresupuestoOrdenCompra(value, { excludeOrdenCompraId: ordenId }),
+      })
+      const productos: LineaForm[] = data.lineas
+        .map((l) => ({
+          tipoPalletId: l.tipoPalletId,
+          cantidad: l.cantidadDisponible,
+          precioUnitario: l.precioUnitarioPresupuesto,
+          presupuestoLineaId: l.presupuestoLineaId,
+        }))
+        .filter((p) => p.cantidad > 0)
+      await formik.setFieldValue('productos', productos)
+      if (productos.length === 0) {
+        toast.info('Sin cantidad disponible en las líneas de este presupuesto para asignar a esta OC.')
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'No se pudo cargar el presupuesto'
+      toast.error(msg)
+      await formik.setFieldValue('presupuestoId', previousId)
+    }
+  }
+
   return (
     <FormikProvider value={formik}>
       <div className="space-y-8">
@@ -261,6 +365,35 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                 )}
               </div>
 
+              <div>
+                <Label htmlFor="presupuestoOcEdit" className="text-sm font-semibold">
+                  Presupuesto (opcional)
+                </Label>
+                <Select
+                  value={formik.values.presupuestoId?.trim() ? formik.values.presupuestoId : '__none__'}
+                  onValueChange={(v) => {
+                    void handleChangePresupuesto(v)
+                  }}
+                >
+                  <SelectTrigger id="presupuestoOcEdit" className="mt-2" type="button">
+                    <SelectValue placeholder="Sin presupuesto" />
+                  </SelectTrigger>
+                  <SelectContent className="z-200">
+                    <SelectItem value="__none__">Sin presupuesto</SelectItem>
+                    {presupuestosOpciones.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.numero} · {p.estado}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Presupuestos enviados o aceptados. Si cambia el presupuesto, las líneas se rellenan con el
+                  disponible de ese presupuesto (esta OC excluida del cómputo). Sin presupuesto: se limpian los
+                  vínculos a líneas del presupuesto.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="fecha" className="text-sm font-semibold">
@@ -310,15 +443,6 @@ function EditarOrdenCompraForm({ ordenId, orden, proveedores, tiposPallet }: Edi
                     className="mt-2"
                   />
                 </div>
-
-                {presupuestoIdTrim ? (
-                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm" role="status">
-                    <span className="text-muted-foreground">Presupuesto vinculado: </span>
-                    <Badge variant="outline" className="ml-1">
-                      {orden.presupuesto?.numero ?? disponibleData?.presupuesto.numero ?? presupuestoIdTrim}
-                    </Badge>
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
 
@@ -572,8 +696,13 @@ export default function EditarOrdenCompraPage() {
     queryFn: fetchTiposPalletCatalogoOrdenCompra,
   })
 
+  const { data: presupuestosLista = [], error: errorPresupuestos } = useQuery({
+    queryKey: ['presupuestos-oc-editar'],
+    queryFn: fetchPresupuestosParaOc,
+  })
+
   const isLoadingCatalogos = loadingProveedores || loadingTipos
-  const errorCatalogos = errorProveedores || errorTipos
+  const errorCatalogos = errorProveedores || errorTipos || errorPresupuestos
 
   if (loadingOrden || isLoadingCatalogos) {
     return (
@@ -640,6 +769,12 @@ export default function EditarOrdenCompraPage() {
   }
 
   return (
-    <EditarOrdenCompraForm ordenId={ordenId} orden={orden} proveedores={proveedores} tiposPallet={tiposPallet} />
+    <EditarOrdenCompraForm
+      ordenId={ordenId}
+      orden={orden}
+      proveedores={proveedores}
+      tiposPallet={tiposPallet}
+      presupuestosLista={presupuestosLista}
+    />
   )
 }

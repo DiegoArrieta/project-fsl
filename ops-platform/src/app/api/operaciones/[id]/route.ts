@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { logPrismaKnownRequestError } from '@/lib/prisma/log-known-request-error'
 import { updateOperacionSchema } from '@/lib/validations/operacion'
 import { calcularTotalesOperacion } from '@/lib/operaciones/calculos'
+import { buildDesgloseCompraOperacionLineas } from '@/lib/operaciones/desglose-compra-operacion'
 
 /**
  * GET /api/operaciones/[id]
@@ -57,6 +58,18 @@ export async function GET(
           },
         },
         ordenCompraGenerada: true,
+        ordenesCompra: {
+          where: { estado: 'RECIBIDA' },
+          orderBy: { updatedAt: 'desc' },
+          include: {
+            proveedor: { select: { razonSocial: true, rut: true } },
+            lineas: {
+              include: {
+                tipoPallet: { select: { nombre: true, codigo: true } },
+              },
+            },
+          },
+        },
       },
     })
 
@@ -67,9 +80,27 @@ export async function GET(
       )
     }
 
+    const desgloseCompraPorLinea = buildDesgloseCompraOperacionLineas({
+      lineasOperacion: operacion.lineas.map((l) => ({
+        id: l.id,
+        tipoPalletId: l.tipoPalletId,
+        presupuestoLineaId: l.presupuestoLineaId,
+        cantidad: l.cantidad,
+      })),
+      ordenesRecibidas: operacion.ordenesCompra.map((oc) => ({
+        id: oc.id,
+        numero: oc.numero,
+        proveedor: { razonSocial: oc.proveedor.razonSocial },
+        lineas: oc.lineas,
+      })),
+    })
+
     return NextResponse.json({
       success: true,
-      data: operacion,
+      data: {
+        ...operacion,
+        desgloseCompraPorLinea,
+      },
     })
   } catch (error) {
     logPrismaKnownRequestError('Error al obtener operación', error)

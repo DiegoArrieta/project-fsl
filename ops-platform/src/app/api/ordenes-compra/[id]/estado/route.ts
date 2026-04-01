@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { updateEstadoOrdenCompraSchema } from '@/lib/validations/orden-compra'
+import { esTransicionEstadoOcPermitida } from '@/lib/ordenes-compra/estado-transiciones'
+import { syncCostosOperacionDesdeOrdenesRecibidas } from '@/lib/operaciones/sync-costo-desde-ordenes-recibidas'
 
 /**
  * PATCH /api/ordenes-compra/[id]/estado
- * Actualiza el estado de una orden de compra
+ * Actualiza el estado de una orden de compra (transiciones válidas según estado-transiciones.ts).
  */
 export async function PATCH(
   request: NextRequest,
@@ -30,24 +32,14 @@ export async function PATCH(
       )
     }
 
-    // Validar transiciones de estado
     const estadoActual = ordenExistente.estado
     const nuevoEstado = validatedData.estado
 
-    // No permitir volver a BORRADOR si ya se generó PDF
-    if (nuevoEstado === 'BORRADOR' && ordenExistente.pdfGenerado) {
-      return NextResponse.json(
-        { success: false, error: 'No se puede volver a BORRADOR una orden con PDF generado' },
-        { status: 400 }
-      )
-    }
-
-    // No permitir cambiar de CANCELADA
-    if (estadoActual === 'CANCELADA' && nuevoEstado !== 'CANCELADA') {
-      return NextResponse.json(
-        { success: false, error: 'No se puede reactivar una orden cancelada' },
-        { status: 400 }
-      )
+    const transicion = esTransicionEstadoOcPermitida(estadoActual, nuevoEstado, {
+      pdfGenerado: ordenExistente.pdfGenerado,
+    })
+    if (!transicion.ok) {
+      return NextResponse.json({ success: false, error: transicion.mensaje }, { status: 400 })
     }
 
     // Actualizar estado
@@ -66,6 +58,10 @@ export async function PATCH(
         },
       },
     })
+
+    if (nuevoEstado === 'RECIBIDA' && ordenExistente.operacionId) {
+      await syncCostosOperacionDesdeOrdenesRecibidas(ordenExistente.operacionId)
+    }
 
     return NextResponse.json({
       success: true,

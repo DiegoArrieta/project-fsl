@@ -1,18 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ArrowLeft, Edit, FileText, DollarSign, Building2, Lock, Loader2, Eye, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Edit,
+  Eye,
+  FileText,
+  Loader2,
+  Lock,
+  Trash2,
+} from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { formatRutForDisplay } from '@/lib/validations/rut'
 import { calcularTotalesDesdeLineas, isDocumentoPresente } from '@/lib/operaciones/operacion-ui-helpers'
 import type {
+  DesgloseCompraOperacionLineaApi,
   DocumentoOperacionApi,
   OperacionApi,
   OperacionLineaApi,
@@ -50,6 +63,7 @@ export default function OperacionDetallePage() {
   const [adjuntarDocumentoOpen, setAdjuntarDocumentoOpen] = useState(false)
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoOperacionApi | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [expandedCompraPorLinea, setExpandedCompraPorLinea] = useState<Record<string, boolean>>({})
 
   const {
     data: operacion,
@@ -130,6 +144,18 @@ export default function OperacionDetallePage() {
 
   const labelProducto = (linea: OperacionLineaApi) =>
     linea.tipoPallet?.nombre || linea.tipoPallet?.codigo || 'Producto'
+
+  const desglosePorLineaId = new Map<string, DesgloseCompraOperacionLineaApi>(
+    (operacion.desgloseCompraPorLinea ?? []).map((d) => [d.operacionLineaId, d])
+  )
+
+  const hayDesvioCantidadCompra = Boolean(
+    operacion.desgloseCompraPorLinea?.some((d) => d.hayDesvioCantidad)
+  )
+
+  const toggleDesgloseCompra = (lineaId: string) => {
+    setExpandedCompraPorLinea((prev) => ({ ...prev, [lineaId]: !prev[lineaId] }))
+  }
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -239,10 +265,22 @@ export default function OperacionDetallePage() {
           <CardTitle>Productos</CardTitle>
         </CardHeader>
         <CardContent>
+          {String(operacion.tipo).startsWith('VENTA_') && hayDesvioCantidadCompra && (
+            <div
+              className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+              role="status"
+            >
+              Hay líneas donde la cantidad comprada en órdenes <strong>RECIBIDA</strong> no coincide con la
+              cantidad vendida en la operación. Revisa el desglose por proveedor.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b">
+                  {String(operacion.tipo).startsWith('VENTA_') && (
+                    <th className="w-10 p-2" aria-label="Expandir desglose de compra" />
+                  )}
                   <th className="text-left p-2">Producto</th>
                   <th className="text-left p-2">Cant.</th>
                   <th className="text-left p-2">Entregado</th>
@@ -250,7 +288,7 @@ export default function OperacionDetallePage() {
                   {String(operacion.tipo).startsWith('VENTA_') && (
                     <>
                       <th className="text-left p-2">Precio Venta</th>
-                      <th className="text-left p-2">Precio Compra</th>
+                      <th className="text-left p-2">Precio Compra (pond.)</th>
                       <th className="text-left p-2">Margen u.</th>
                     </>
                   )}
@@ -262,34 +300,115 @@ export default function OperacionDetallePage() {
                   const pv = Number(producto.precioVentaUnitario ?? 0)
                   const pc = Number(producto.precioCompraUnitario ?? 0)
                   const margenU = pv - pc
+                  const lineaId = producto.id || `${producto.tipoPalletId}-${producto.cantidad}`
+                  const desglose = producto.id ? desglosePorLineaId.get(producto.id) : undefined
+                  const expandido = Boolean(producto.id && expandedCompraPorLinea[producto.id])
+                  const esVenta = String(operacion.tipo).startsWith('VENTA_')
+                  const colSpanVenta = 8
                   return (
-                    <tr key={producto.id || `${producto.tipoPalletId}-${producto.cantidad}`} className="border-b">
-                      <td className="p-2">{labelProducto(producto)}</td>
-                      <td className="p-2">{producto.cantidad}</td>
-                      <td className="p-2">
-                        {producto.cantidadEntregada}{' '}
-                        {producto.cantidadEntregada === producto.cantidad ? '✓' : ''}
-                      </td>
-                      <td className="p-2">
-                        {producto.cantidadDanada > 0 ? (
-                          <span className="text-destructive">⚠️ {producto.cantidadDanada}</span>
-                        ) : (
-                          '-'
+                    <Fragment key={lineaId}>
+                      <tr className="border-b">
+                        {esVenta && (
+                          <td className="p-1 align-middle">
+                            {desglose && desglose.fuentes.length > 0 && producto.id ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                aria-expanded={expandido}
+                                aria-label={
+                                  expandido ? 'Ocultar desglose de compras' : 'Ver desglose por orden y proveedor'
+                                }
+                                onClick={() => producto.id && toggleDesgloseCompra(producto.id)}
+                              >
+                                {expandido ? (
+                                  <ChevronDown className="h-4 w-4" aria-hidden />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" aria-hidden />
+                                )}
+                              </Button>
+                            ) : null}
+                          </td>
                         )}
-                      </td>
-                      {String(operacion.tipo).startsWith('VENTA_') && (
-                        <>
-                          <td className="p-2">${pv.toLocaleString('es-CL')}</td>
-                          <td className="p-2">${pc.toLocaleString('es-CL')}</td>
-                          <td className="p-2">${margenU.toLocaleString('es-CL')}</td>
-                        </>
-                      )}
-                      {operacion.tipo === 'COMPRA' && (
+                        <td className="p-2">{labelProducto(producto)}</td>
+                        <td className="p-2">{producto.cantidad}</td>
                         <td className="p-2">
-                          ${Number(producto.precioUnitario ?? 0).toLocaleString('es-CL')}
+                          {producto.cantidadEntregada}{' '}
+                          {producto.cantidadEntregada === producto.cantidad ? '✓' : ''}
                         </td>
+                        <td className="p-2">
+                          {producto.cantidadDanada > 0 ? (
+                            <span className="text-destructive">⚠️ {producto.cantidadDanada}</span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        {esVenta && (
+                          <>
+                            <td className="p-2">${pv.toLocaleString('es-CL')}</td>
+                            <td className="p-2">${pc.toLocaleString('es-CL')}</td>
+                            <td className="p-2">${margenU.toLocaleString('es-CL')}</td>
+                          </>
+                        )}
+                        {operacion.tipo === 'COMPRA' && (
+                          <td className="p-2">
+                            ${Number(producto.precioUnitario ?? 0).toLocaleString('es-CL')}
+                          </td>
+                        )}
+                      </tr>
+                      {esVenta && expandido && desglose && desglose.fuentes.length > 0 && (
+                        <tr className="border-b bg-muted/30">
+                          <td colSpan={colSpanVenta} className="p-3">
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Compras en órdenes <strong>RECIBIDA</strong> · Vendido en op.:{' '}
+                              {desglose.cantidadVenta} u. · Comprado (suma OC):{' '}
+                              {desglose.cantidadCompradaRecibida} u.
+                              {desglose.hayDesvioCantidad ? (
+                                <span className="ml-2 text-amber-700 dark:text-amber-400">
+                                  (desvío de cantidad)
+                                </span>
+                              ) : null}
+                            </p>
+                            <div className="overflow-x-auto rounded-md border bg-background">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b text-left text-muted-foreground">
+                                    <th className="p-2 font-medium">OC</th>
+                                    <th className="p-2 font-medium">Proveedor</th>
+                                    <th className="p-2 font-medium text-right">Cant.</th>
+                                    <th className="p-2 font-medium text-right">P. unit. compra</th>
+                                    <th className="p-2 font-medium text-right">Subtotal</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {desglose.fuentes.map((f, i) => (
+                                    <tr key={`${f.ordenCompraId}-${i}`} className="border-b last:border-0">
+                                      <td className="p-2">
+                                        <Link
+                                          href={`/ordenes-compra/${f.ordenCompraId}`}
+                                          className="text-primary underline-offset-4 hover:underline"
+                                        >
+                                          {f.ordenCompraNumero}
+                                        </Link>
+                                      </td>
+                                      <td className="p-2">{f.proveedorRazonSocial}</td>
+                                      <td className="p-2 text-right">{f.cantidad}</td>
+                                      <td className="p-2 text-right">
+                                        ${f.precioUnitario.toLocaleString('es-CL')}
+                                      </td>
+                                      <td className="p-2 text-right">
+                                        ${f.subtotal.toLocaleString('es-CL')}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -305,7 +424,7 @@ export default function OperacionDetallePage() {
                     <span className="font-semibold">${totales.totalVenta.toLocaleString('es-CL')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Total Compra (est.):</span>
+                    <span>Total Compra (OC recibidas, prom. pond.):</span>
                     <span className="font-semibold">${totales.totalCompra.toLocaleString('es-CL')}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, FileDown, CheckCircle2, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, FileDown, CheckCircle2, Edit, Trash2, CircleHelp } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,9 +14,12 @@ import { es } from 'date-fns/locale'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatTipoPalletAtributosLineaDesdeInput } from '@/lib/tipos-pallet/orden-compra-catalogo'
 import { ConfirmIrreversibleActionDialog } from '@/components/shared/confirm-irreversible-action-dialog'
+import { PresupuestoEstadosWorkflowDialog } from '@/components/presupuestos/presupuesto-estados-workflow-dialog'
+import { segmentoRutaParam } from '@/lib/presupuestos/segmento-ruta'
+import { aceptarPresupuestoPorId } from '@/lib/presupuestos/aceptar-presupuesto-api'
 
 async function obtenerPresupuesto(id: string) {
-  const response = await fetch(`/api/presupuestos/${id}`)
+  const response = await fetch(`/api/presupuestos/${encodeURIComponent(id)}`, { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Presupuesto no encontrado')
   }
@@ -25,25 +28,15 @@ async function obtenerPresupuesto(id: string) {
 }
 
 async function eliminarPresupuestoApi(id: string) {
-  const response = await fetch(`/api/presupuestos/${id}`, { method: 'DELETE' })
+  const response = await fetch(`/api/presupuestos/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
   const json = await response.json().catch(() => ({}))
   if (!response.ok) {
     throw new Error(json.error || 'Error al eliminar presupuesto')
   }
   return json
-}
-
-async function aceptarPresupuesto(id: string) {
-  const response = await fetch(`/api/presupuestos/${id}/aceptar`, {
-    method: 'POST',
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Error al aceptar presupuesto')
-  }
-
-  return response.json()
 }
 
 const estadoLabels: Record<string, string> = {
@@ -56,13 +49,15 @@ const estadoLabels: Record<string, string> = {
 export default function PresupuestoDetallePage() {
   const params = useParams()
   const router = useRouter()
-  const id = params.id as string
+  const id = segmentoRutaParam(params.id)
   const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [estadosWorkflowOpen, setEstadosWorkflowOpen] = useState(false)
 
   const { data: presupuesto, isLoading, error } = useQuery({
     queryKey: ['presupuesto', id],
     queryFn: () => obtenerPresupuesto(id),
+    enabled: Boolean(id),
   })
 
   const handleConfirmDeletePresupuesto = async () => {
@@ -79,7 +74,13 @@ export default function PresupuestoDetallePage() {
   }
 
   const acceptMutation = useMutation({
-    mutationFn: () => aceptarPresupuesto(id),
+    mutationFn: () => {
+      const pid = presupuesto?.id ?? id
+      if (!pid) {
+        return Promise.reject(new Error('Presupuesto no cargado'))
+      }
+      return aceptarPresupuestoPorId(pid)
+    },
     onSuccess: (response) => {
       toast.success('Presupuesto aceptado correctamente')
       queryClient.invalidateQueries({ queryKey: ['presupuesto', id] })
@@ -92,9 +93,12 @@ export default function PresupuestoDetallePage() {
   })
 
   const handleDownloadPDF = async () => {
+    if (!presupuesto?.id) return
     try {
       toast.loading('Generando PDF...')
-      const response = await fetch(`/api/presupuestos/${id}/pdf`)
+      const response = await fetch(`/api/presupuestos/${encodeURIComponent(presupuesto.id)}/pdf`, {
+        credentials: 'include',
+      })
       if (!response.ok) throw new Error('Error al generar PDF')
       
       const blob = await response.blob()
@@ -107,10 +111,23 @@ export default function PresupuestoDetallePage() {
       window.URL.revokeObjectURL(url)
       toast.dismiss()
       toast.success('PDF descargado')
-    } catch (err) {
+    } catch {
       toast.dismiss()
       toast.error('Error al descargar PDF')
     }
+  }
+
+  if (!id) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">La URL del presupuesto no es válida.</p>
+          <Button asChild className="mt-4">
+            <Link href="/presupuestos">Volver a Presupuestos</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -145,9 +162,20 @@ export default function PresupuestoDetallePage() {
             </Link>
           </Button>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-3xl font-bold">{presupuesto.numero}</h1>
               <Badge variant="outline">{estadoLabels[presupuesto.estado]}</Badge>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => setEstadosWorkflowOpen(true)}
+                aria-label="Ver explicación del flujo de estados del presupuesto"
+              >
+                <CircleHelp className="h-4 w-4 shrink-0" aria-hidden />
+                Estados y flujo
+              </Button>
             </div>
             <p className="text-muted-foreground mt-1">
               Presupuesto para cliente
@@ -163,7 +191,7 @@ export default function PresupuestoDetallePage() {
           
           {presupuesto.estado === 'BORRADOR' && (
             <Button variant="outline" asChild>
-              <Link href={`/presupuestos/${id}/editar`}>
+              <Link href={`/presupuestos/${presupuesto.id}/editar`}>
                 <Edit className="h-4 w-4 mr-2" />
                 Editar
               </Link>
@@ -198,6 +226,12 @@ export default function PresupuestoDetallePage() {
           )}
         </div>
       </div>
+
+      <PresupuestoEstadosWorkflowDialog
+        open={estadosWorkflowOpen}
+        onOpenChange={setEstadosWorkflowOpen}
+        estadoActual={presupuesto.estado}
+      />
 
       <ConfirmIrreversibleActionDialog
         open={deleteDialogOpen}

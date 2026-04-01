@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +34,7 @@ export default function OrdenCompraDetallePage() {
   const queryClient = useQueryClient()
   const [isDownloading, setIsDownloading] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
 
   const {
     data: oc,
@@ -47,6 +48,7 @@ export default function OrdenCompraDetallePage() {
 
   const handleDescargarPDF = async () => {
     if (!oc) return
+    const eraBorrador = oc.estado === 'BORRADOR'
     try {
       setIsDownloading(true)
       toast.loading('Generando PDF...', { id: 'download-pdf' })
@@ -68,8 +70,14 @@ export default function OrdenCompraDetallePage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      toast.success('PDF descargado correctamente', { id: 'download-pdf' })
-      queryClient.invalidateQueries({ queryKey: ['orden-compra', id] })
+      toast.success(
+        eraBorrador
+          ? 'PDF descargado. La orden pasó a estado ENVIADA.'
+          : 'PDF descargado correctamente',
+        { id: 'download-pdf' }
+      )
+      await queryClient.invalidateQueries({ queryKey: ['orden-compra', id] })
+      await queryClient.invalidateQueries({ queryKey: ['ordenes-compra'] })
     } catch (e: unknown) {
       console.error('Error al descargar PDF:', e)
       const message = e instanceof Error ? e.message : 'Error al descargar PDF'
@@ -91,6 +99,43 @@ export default function OrdenCompraDetallePage() {
     await queryClient.invalidateQueries({ queryKey: ['ordenes-compra'] })
     router.push('/ordenes-compra')
   }
+
+  const marcarRecibidaMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/ordenes-compra/${id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'RECIBIDA' }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'No se pudo marcar como recibida')
+      return body
+    },
+    onSuccess: () => {
+      toast.success('Orden marcada como recibida')
+      void queryClient.invalidateQueries({ queryKey: ['orden-compra', id] })
+      void queryClient.invalidateQueries({ queryKey: ['ordenes-compra'] })
+      void queryClient.invalidateQueries({ queryKey: ['operacion'] })
+    },
+  })
+
+  const cancelarOcMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/ordenes-compra/${id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'CANCELADA' }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'No se pudo cancelar la orden')
+      return body
+    },
+    onSuccess: () => {
+      toast.success('Orden cancelada')
+      void queryClient.invalidateQueries({ queryKey: ['orden-compra', id] })
+      void queryClient.invalidateQueries({ queryKey: ['ordenes-compra'] })
+    },
+  })
 
   if (isLoading) {
     return (
@@ -180,6 +225,23 @@ export default function OrdenCompraDetallePage() {
         entitySummary={`Orden ${oc.numero} · Solo se pueden eliminar órdenes en borrador.`}
         warningText="Esta acción es irreversible. La orden y sus líneas dejarán de existir en el sistema."
         onConfirm={handleConfirmDeleteOrden}
+      />
+
+      <ConfirmIrreversibleActionDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        title="¿Cancelar esta orden de compra?"
+        entitySummary={`Orden ${oc.numero}`}
+        warningText="La orden pasará a estado CANCELADA y no podrá editarse ni reactivarse desde la app."
+        confirmLabel="Cancelar orden"
+        onConfirm={async () => {
+          try {
+            await cancelarOcMutation.mutateAsync()
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'No se pudo cancelar')
+            throw e
+          }
+        }}
       />
 
       {/* Información General */}
@@ -292,16 +354,35 @@ export default function OrdenCompraDetallePage() {
         <CardHeader>
           <CardTitle>Descargar Orden de Compra</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {oc.estado === 'BORRADOR' && (
+            <div
+              id="oc-pdf-cambia-estado-aviso"
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+              role="status"
+            >
+              <strong>Importante:</strong> al descargar el PDF, la orden pasará automáticamente a estado{' '}
+              <strong>ENVIADA</strong> (queda registrado el envío al proveedor). Asegúrate de que el contenido
+              esté finalizado antes de descargar.
+            </div>
+          )}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm text-muted-foreground">
                 {oc.pdfGenerado
                   ? `PDF generado el ${format(new Date(oc.fecha), 'dd/MM/yyyy')}`
-                  : 'Descarga el PDF de esta orden de compra'}
+                  : oc.estado === 'BORRADOR'
+                    ? 'Genera y descarga el PDF para enviar la orden al proveedor.'
+                    : 'Descarga el PDF de esta orden de compra'}
               </p>
             </div>
-            <Button variant="outline" type="button" onClick={handleDescargarPDF} disabled={isDownloading}>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={handleDescargarPDF}
+              disabled={isDownloading}
+              aria-describedby={oc.estado === 'BORRADOR' ? 'oc-pdf-cambia-estado-aviso' : undefined}
+            >
               <Download className="h-4 w-4 mr-2" aria-hidden />
               {isDownloading ? 'Generando...' : 'Descargar PDF'}
             </Button>
@@ -314,14 +395,32 @@ export default function OrdenCompraDetallePage() {
         <CardContent className="pt-6">
           <div className="flex gap-4">
             {oc.estado === 'ENVIADA' && (
-              <Button variant="outline" className="flex-1" type="button">
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Marcar como Recibida
+              <Button
+                variant="outline"
+                className="flex-1"
+                type="button"
+                disabled={marcarRecibidaMutation.isPending}
+                onClick={() => {
+                  marcarRecibidaMutation.mutate(undefined, {
+                    onError: (e) => {
+                      toast.error(e instanceof Error ? e.message : 'Error al actualizar estado')
+                    },
+                  })
+                }}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden />
+                {marcarRecibidaMutation.isPending ? 'Guardando…' : 'Marcar como Recibida'}
               </Button>
             )}
             {oc.estado !== 'CANCELADA' && oc.estado !== 'RECIBIDA' && (
-              <Button variant="destructive" className="flex-1" type="button">
-                <XCircle className="h-4 w-4 mr-2" />
+              <Button
+                variant="destructive"
+                className="flex-1"
+                type="button"
+                disabled={cancelarOcMutation.isPending}
+                onClick={() => setCancelDialogOpen(true)}
+              >
+                <XCircle className="h-4 w-4 mr-2" aria-hidden />
                 Cancelar OC
               </Button>
             )}

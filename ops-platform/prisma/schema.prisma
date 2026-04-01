@@ -251,6 +251,7 @@ model OperacionLinea {
   id                   String     @id @default(uuid()) @db.Uuid
   operacionId          String     @map("operacion_id") @db.Uuid
   tipoPalletId         String     @map("tipo_pallet_id") @db.Uuid
+  presupuestoLineaId   String?    @map("presupuesto_linea_id") @db.Uuid
   cantidad             Int
   cantidadEntregada    Int        @default(0) @map("cantidad_entregada")
   cantidadDanada       Int        @default(0) @map("cantidad_danada")
@@ -261,10 +262,12 @@ model OperacionLinea {
   createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
   operacion            Operacion  @relation(fields: [operacionId], references: [id], onDelete: Cascade)
   tipoPallet           TipoPallet @relation(fields: [tipoPalletId], references: [id])
+  presupuestoLinea     PresupuestoLinea? @relation(fields: [presupuestoLineaId], references: [id], onDelete: SetNull)
 
   @@index([operacionId])
   @@index([tipoPalletId])
   @@index([operacionId, tipoPalletId])
+  @@index([presupuestoLineaId])
   @@map("operacion_linea")
 }
 
@@ -517,6 +520,7 @@ model PresupuestoLinea {
   presupuesto       Presupuesto        @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
   tipoPallet        TipoPallet         @relation(fields: [tipoPalletId], references: [id])
   ordenCompraLineas OrdenCompraLinea[]
+  operacionLineas   OperacionLinea[]
 
   @@index([presupuestoId])
   @@index([tipoPalletId])

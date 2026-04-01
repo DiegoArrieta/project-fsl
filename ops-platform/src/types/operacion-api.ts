@@ -2,9 +2,28 @@
  * Forma mínima de operación devuelta por GET /api/operaciones y GET /api/operaciones/[id]
  */
 
+export interface FuenteCompraOperacionLineaApi {
+  ordenCompraId: string
+  ordenCompraNumero: string
+  proveedorRazonSocial: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+}
+
+export interface DesgloseCompraOperacionLineaApi {
+  operacionLineaId: string
+  tipoPalletId: string
+  cantidadVenta: number
+  cantidadCompradaRecibida: number
+  hayDesvioCantidad: boolean
+  fuentes: FuenteCompraOperacionLineaApi[]
+}
+
 export interface OperacionLineaApi {
   id: string
   tipoPalletId: string
+  presupuestoLineaId?: string | null
   cantidad: number
   cantidadEntregada: number
   cantidadDanada: number
@@ -86,4 +105,14 @@ export interface OperacionApi {
   documentos?: DocumentoOperacionApi[]
   pagos?: PagoOperacionApi[]
   factoring?: FactoringOperacionApi | null
+  /** Órdenes de compra en estado RECIBIDA vinculadas a la operación */
+  ordenesCompra?: Array<{
+    id: string
+    numero: string
+    estado: string
+    proveedor?: { razonSocial: string; rut?: string | null }
+    lineas?: unknown[]
+  }>
+  /** Desglose de compras por línea (OC RECIBIDA) para margen multi-proveedor */
+  desgloseCompraPorLinea?: DesgloseCompraOperacionLineaApi[]
 }

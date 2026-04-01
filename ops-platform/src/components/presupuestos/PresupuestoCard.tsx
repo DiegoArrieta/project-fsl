@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar, MapPin, Calculator, ChevronRight, Edit, FileText } from 'lucide-react'
+import { Calendar, MapPin, Calculator, ChevronRight, Edit } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -32,6 +32,11 @@ const estadoColors: Record<string, string> = {
   RECHAZADO: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
+function segmentoIdPresupuesto(value: string): string {
+  const s = typeof value === 'string' ? value.trim() : ''
+  return s
+}
+
 export function PresupuestoCard({
   id,
   numero,
@@ -42,6 +47,8 @@ export function PresupuestoCard({
   ciudad,
 }: PresupuestoCardProps) {
   const fechaDate = typeof fecha === 'string' ? new Date(fecha) : fecha
+  const idSeguro = segmentoIdPresupuesto(id)
+  const basePath = idSeguro ? `/presupuestos/${idSeguro}` : ''
 
   return (
     <Card className="group hover:shadow-xl transition-all duration-200 border-l-4 border-l-primary/50 hover:border-l-primary">
@@ -81,23 +88,38 @@ export function PresupuestoCard({
         </div>
 
         <div className="flex gap-2 pt-2 border-t">
-          <Button variant="outline" size="sm" asChild className="flex-1 hover:bg-accent">
-            <Link href={`/presupuestos/${id}/editar`}>
-              <Edit className="h-3.5 w-3.5 mr-1.5" />
-              Editar
-            </Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="flex-1 group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
-          >
-            <Link href={`/presupuestos/${id}`} className="flex items-center justify-center gap-1">
-              Detalles
-              <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </Button>
+          {idSeguro ? (
+            <>
+              <Button variant="outline" size="sm" asChild className="flex-1 hover:bg-accent">
+                <Link href={`${basePath}/editar`}>
+                  <Edit className="h-3.5 w-3.5 mr-1.5" />
+                  Editar
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="flex-1 group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+              >
+                <Link href={basePath} className="flex items-center justify-center gap-1">
+                  Detalles
+                  <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="flex-1" type="button" disabled>
+                <Edit className="h-3.5 w-3.5 mr-1.5" />
+                Editar
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" type="button" disabled>
+                Detalles
+                <ChevronRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

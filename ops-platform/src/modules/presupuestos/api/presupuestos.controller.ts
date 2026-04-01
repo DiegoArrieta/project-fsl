@@ -263,6 +263,13 @@ export class PresupuestosController {
         message: 'Presupuesto aceptado y operación creada correctamente',
       })
     } catch (error: any) {
+      if (error.message === 'Presupuesto no encontrado') {
+        return NextResponse.json(
+          { success: false, error: 'Presupuesto no encontrado' },
+          { status: 404 }
+        )
+      }
+
       if (error.message?.includes('no puede ser aceptado')) {
         return NextResponse.json(
           { success: false, error: error.message },

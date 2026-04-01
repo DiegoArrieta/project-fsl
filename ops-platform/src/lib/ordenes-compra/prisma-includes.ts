@@ -8,6 +8,13 @@ export const ordenCompraLineasConTipoPalletDetalle = {
           paises: { include: { pais: true } },
         },
       },
+      presupuestoLinea: {
+        select: {
+          id: true,
+          presupuestoId: true,
+          presupuesto: { select: { id: true, numero: true, estado: true } },
+        },
+      },
     },
   },
 } as const
