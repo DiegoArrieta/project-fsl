@@ -94,20 +94,9 @@ export class S3StorageProvider implements IStorageProvider {
       })
     )
 
-    const publicBase = process.env.AWS_S3_PUBLIC_BASE_URL?.replace(/\/$/, '')
-    let url: string
-    if (publicBase) {
-      url = `${publicBase}/${encodeURI(key)}`
-    } else {
-      url = await getSignedUrl(
-        this.client,
-        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-        { expiresIn: 3600 }
-      )
-    }
-
+    /** En BD se persiste la clave; las lecturas usan siempre GetObject firmado. */
     return {
-      url,
+      url: key,
       key,
       filename,
       contentType,
@@ -125,16 +114,16 @@ export class S3StorageProvider implements IStorageProvider {
     )
   }
 
+  /**
+   * Siempre URL firmada (GetObject). No usar URL pública del bucket: con bloqueo de acceso público devuelve AccessDenied.
+   * `AWS_S3_PUBLIC_BASE_URL` solo afecta a `parseStoredKey` si en BD hay URLs antiguas guardadas con ese origen.
+   */
   async getDocumentUrl(
     stored: string,
     expiresIn = 3600,
     options?: GetDocumentUrlOptions
   ): Promise<string> {
     const key = parseStoredKey(stored)
-    const publicBase = process.env.AWS_S3_PUBLIC_BASE_URL?.replace(/\/$/, '')
-    if (publicBase) {
-      return `${publicBase}/${encodeURI(key)}`
-    }
     const attachment =
       options?.contentDisposition === 'attachment' && options.downloadFilename
     const input: GetObjectCommandInput = {

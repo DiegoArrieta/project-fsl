@@ -23,6 +23,7 @@ import { RegistrarPagoDialog } from '@/components/operaciones/RegistrarPagoDialo
 import { RegistrarFactoringDialog } from '@/components/operaciones/RegistrarFactoringDialog'
 import { AdjuntarDocumentoDialog } from '@/components/operaciones/AdjuntarDocumentoDialog'
 import { DocumentoVisualizarDialog } from '@/components/operaciones/DocumentoVisualizarDialog'
+import { DocumentoDownloadButton } from '@/components/operaciones/DocumentoDownloadButton'
 
 async function fetchOperacionById(id: string): Promise<OperacionApi | null> {
   const response = await fetch(`/api/operaciones/${id}`)
@@ -331,6 +332,12 @@ export default function OperacionDetallePage() {
                         <span aria-hidden>{presente ? '✅' : '❌'}</span>
                         <div className="min-w-0">
                           <p className="font-medium">{labelTipo}</p>
+                          {doc.uploadedAt ? (
+                            <p className="text-xs text-muted-foreground">
+                              Agregado{' '}
+                              {format(new Date(doc.uploadedAt), 'dd/MM/yyyy HH:mm')}
+                            </p>
+                          ) : null}
                           {doc.numeroDocumento && (
                             <p className="text-sm text-muted-foreground">N° {doc.numeroDocumento}</p>
                           )}
@@ -356,16 +363,12 @@ export default function OperacionDetallePage() {
                             <Eye className="h-4 w-4 mr-2" aria-hidden />
                             Ver
                           </Button>
-                          <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
-                            <a
-                              href={`/api/documentos/${doc.id}/archivo?download=1`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`Descargar ${doc.archivoNombre ?? 'documento'}`}
-                            >
-                              Descargar
-                            </a>
-                          </Button>
+                          <DocumentoDownloadButton
+                            documentoId={doc.id}
+                            archivoNombre={doc.archivoNombre}
+                            className="w-full sm:w-auto"
+                            aria-label={`Descargar ${doc.archivoNombre ?? 'documento'}`}
+                          />
                         </div>
                       )}
                     </div>

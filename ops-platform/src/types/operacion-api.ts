@@ -24,6 +24,8 @@ export interface DocumentoOperacionApi {
   archivoUrl?: string | null
   archivoNombre?: string | null
   archivoTipo?: string | null
+  /** ISO desde Prisma `uploadedAt` */
+  uploadedAt?: string | Date | null
   presente?: boolean
 }
 
